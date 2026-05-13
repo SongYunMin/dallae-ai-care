@@ -1,26 +1,53 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { AppProvider, useApp } from "@/state/app-state";
+import { MobileShell } from "@/components/MobileShell";
+import { SplashScreen } from "@/screens/SplashScreen";
+import { OnboardingScreen } from "@/screens/OnboardingScreen";
+import { DashboardScreen } from "@/screens/DashboardScreen";
+import { RecordsScreen, RecordNewScreen } from "@/screens/RecordsScreen";
+import { CareModeScreen } from "@/screens/CareModeScreen";
+import { ChatScreen } from "@/screens/ChatScreen";
+import { NotificationsScreen } from "@/screens/NotificationsScreen";
+import { FamilyScreen } from "@/screens/FamilyScreen";
+import { InviteScreen } from "@/screens/InviteScreen";
+import { RulesScreen } from "@/screens/RulesScreen";
+import { ReportScreen } from "@/screens/ReportScreen";
 
 export const Route = createFileRoute("/")({
   component: Index,
+  head: () => ({
+    meta: [
+      { title: "달래 — AI 돌봄 에이전트" },
+      { name: "description", content: "아이를 함께 돌보는 AI 돌봄 에이전트, 달래." },
+    ],
+  }),
 });
 
-// IMPORTANT: Replace this placeholder. For sites with multiple pages (About, Services, Contact, etc.),
-// create separate route files (about.tsx, services.tsx, contact.tsx) — don't put all pages in this file.
-function PlaceholderIndex() {
+function Inner() {
+  const { screen } = useApp();
+  const noNav = screen === "splash" || screen === "onboarding" || screen === "invite" || screen === "report";
   return (
-    <div
-      className="flex min-h-screen items-center justify-center"
-      style={{ backgroundColor: "#fcfbf8" }}
-    >
-      <img
-        data-lovable-blank-page-placeholder="REMOVE_THIS"
-        src="https://cdn.gpteng.co/blank-app-v1.svg"
-        alt="Your app will live here!"
-      />
-    </div>
+    <MobileShell hideNav={noNav}>
+      {screen === "splash" && <SplashScreen />}
+      {screen === "onboarding" && <OnboardingScreen />}
+      {screen === "dashboard" && <DashboardScreen />}
+      {screen === "records" && <RecordsScreen />}
+      {screen === "recordNew" && <RecordNewScreen />}
+      {screen === "careMode" && <CareModeScreen />}
+      {screen === "chat" && <ChatScreen />}
+      {screen === "notifications" && <NotificationsScreen />}
+      {screen === "family" && <FamilyScreen />}
+      {screen === "invite" && <InviteScreen />}
+      {screen === "rules" && <RulesScreen />}
+      {screen === "report" && <ReportScreen />}
+    </MobileShell>
   );
 }
 
 function Index() {
-  return <PlaceholderIndex />;
+  return (
+    <AppProvider>
+      <Inner />
+    </AppProvider>
+  );
 }
