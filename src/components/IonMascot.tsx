@@ -35,7 +35,7 @@ export function AgentAvatar({ size = 36 }: { size?: number }) {
       className="rounded-full bg-mint shadow-card overflow-hidden flex items-center justify-center shrink-0"
       style={{ width: size, height: size }}
     >
-      <img src={map.icon as unknown as string ?? basic} alt="아이온" style={{ width: size + 8, height: size + 8 }} />
+      <img src={basic} alt="아이온" style={{ width: size + 8, height: size + 8 }} />
     </div>
   );
 }
