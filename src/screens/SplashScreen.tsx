@@ -33,7 +33,7 @@ export function SplashScreen() {
           onClick={() => navigate('invite', { token: 'invite_demo123' })}
           className="w-full h-14 rounded-2xl bg-card text-foreground font-semibold text-base border border-border active:scale-[0.98] transition-transform"
         >
-          초대 링크로 참여하기
+          초대 링크로 돌봄 시작하기
         </button>
         <button
           onClick={() => navigate('dashboard')}
