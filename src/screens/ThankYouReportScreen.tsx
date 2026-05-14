@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { useApp } from '@/state/app-state';
 import { IonMascot } from '@/components/IonMascot';
-import { formatDuration } from '@/lib/date';
-import type { ThankYouTone } from '@/lib/types';
-import { Sparkles, Send, RefreshCw, Loader2 } from 'lucide-react';
+import { formatDuration, formatTime } from '@/lib/date';
+import type { CareRecord, ThankYouTone } from '@/lib/types';
+import { Sparkles, Send, RefreshCw, Loader2, ClipboardList } from 'lucide-react';
 
 const TONES: { value: ThankYouTone; label: string; emoji: string }[] = [
   { value: 'WARM', label: '따듯함', emoji: '🌿' },
@@ -13,24 +13,36 @@ const TONES: { value: ThankYouTone; label: string; emoji: string }[] = [
   { value: 'CONCISE', label: '짧고 담백', emoji: '✂️' },
 ];
 
-const QUICK_PHRASES = [
-  '오늘도 정말 고마워요 🙏',
-  '덕분에 한숨 돌렸어요',
-  '아이가 평온하게 지냈어요',
-];
+const TYPE_LABEL: Record<CareRecord['type'], string> = {
+  FEEDING: '수유',
+  DIAPER: '기저귀',
+  SLEEP_START: '낮잠 시작',
+  SLEEP_END: '낮잠 종료',
+  MEDICINE: '약',
+  CRYING: '울음',
+  NOTE: '메모',
+};
 
 export function ThankYouReportScreen() {
-  const { lastEndedSession, records, currentUser, navigate, addThankYouReport, toast } = useApp();
+  const { lastEndedSession, records, child, currentUser, navigate, addThankYouReport, toast } = useApp();
   const session = lastEndedSession;
 
+  // 세션 동안 기록한 것만 추출
+  const sessionRecords = session
+    ? records
+        .filter((r) => new Date(r.at).getTime() >= new Date(session.startedAt).getTime())
+        .filter((r) => !session.endedAt || new Date(r.at).getTime() <= new Date(session.endedAt).getTime())
+        .sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime())
+    : [];
+
   const counts = {
-    feeding: records.filter((r) => r.type === 'FEEDING').length,
-    diaper: records.filter((r) => r.type === 'DIAPER').length,
-    sleep: records.filter((r) => r.type.startsWith('SLEEP')).length,
-    medicine: records.filter((r) => r.type === 'MEDICINE').length,
+    feeding: sessionRecords.filter((r) => r.type === 'FEEDING').length,
+    diaper: sessionRecords.filter((r) => r.type === 'DIAPER').length,
+    sleep: sessionRecords.filter((r) => r.type.startsWith('SLEEP')).length,
+    medicine: sessionRecords.filter((r) => r.type === 'MEDICINE').length,
   };
   const durationLabel = session ? formatDuration(session.startedAt, session.endedAt) : '4시간 10분';
-  const caregiverName = session?.caregiverName ?? '돌봄자';
+  const caregiverName = session?.caregiverName ?? currentUser.name;
 
   const [tone, setTone] = useState<ThankYouTone>('WARM');
   const [message, setMessage] = useState('');
@@ -44,7 +56,7 @@ export function ThankYouReportScreen() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           caregiverName,
-          childName: '아이',
+          childName: child.name,
           durationLabel,
           counts,
           tone,
@@ -71,15 +83,15 @@ export function ThankYouReportScreen() {
       id: `thx_${Date.now().toString(36)}`,
       sessionId: session.id,
       fromUserId: currentUser.id,
-      fromUserName: currentUser.name,
-      toCaregiverName: caregiverName,
+      fromUserName: caregiverName,
+      toCaregiverName: '부모님',
       message: skip ? '' : message.trim(),
       tone: skip ? undefined : tone,
       durationLabel,
       counts,
       sentAt: new Date().toISOString(),
     });
-    toast(skip ? '리포트만 전달했어요' : `${caregiverName}님께 수고리포트를 보냈어요`);
+    toast(skip ? '돌봄 리포트를 전달했어요' : '돌봄 리포트를 보냈어요');
     navigate('report');
   };
 
@@ -89,17 +101,22 @@ export function ThankYouReportScreen() {
         <div className="text-center space-y-2">
           <IonMascot variant="wink" size={120} className="mx-auto" />
           <h1 className="text-xl font-bold leading-snug">
-            {caregiverName}님께<br />
-            <span className="text-primary">수고리포트</span>를 보내요
+            오늘 돌봄을 마쳤어요<br />
+            <span className="text-primary">부모님께 리포트</span>를 보내요
           </h1>
           <p className="text-xs text-muted-foreground">
-            오늘 함께해주신 분께 한 마디 전해요 (선택)
+            오늘 기록한 내용과 메시지를 함께 전달해요
           </p>
         </div>
 
+        {/* 요약 */}
         <div className="rounded-3xl bg-card shadow-card p-4">
-          <p className="text-[11px] font-bold tracking-wider text-muted-foreground">오늘의 돌봄</p>
-          <p className="font-bold text-sm mt-1">{durationLabel} · 기록 {counts.feeding + counts.diaper + counts.sleep + counts.medicine}건</p>
+          <p className="text-[11px] font-bold tracking-wider text-muted-foreground">
+            {caregiverName}님의 돌봄
+          </p>
+          <p className="font-bold text-sm mt-1">
+            {durationLabel} · 기록 {sessionRecords.length}건
+          </p>
           <div className="grid grid-cols-4 gap-1 mt-2 text-center text-[11px]">
             <Stat n={counts.feeding} label="수유" />
             <Stat n={counts.diaper} label="기저귀" />
@@ -108,10 +125,48 @@ export function ThankYouReportScreen() {
           </div>
         </div>
 
+        {/* 세션 기록 리스트 */}
+        <div className="rounded-3xl bg-card shadow-card p-4 space-y-2">
+          <div className="flex items-center gap-1.5">
+            <ClipboardList size={14} className="text-foreground/70" />
+            <p className="font-bold text-sm">오늘 기록한 내용</p>
+          </div>
+          {sessionRecords.length === 0 ? (
+            <p className="text-xs text-muted-foreground py-3 text-center">
+              이번 돌봄에 남긴 기록이 없어요
+            </p>
+          ) : (
+            <ul className="space-y-1.5">
+              {sessionRecords.map((r) => (
+                <li
+                  key={r.id}
+                  className="flex items-start gap-2 rounded-xl bg-cream/70 px-3 py-2"
+                >
+                  <span className="text-[10px] font-bold tracking-wider text-mint-foreground bg-mint/40 px-2 py-0.5 rounded-full mt-0.5 shrink-0">
+                    {formatTime(r.at)}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold">
+                      {TYPE_LABEL[r.type]}
+                      {r.amountMl ? ` · ${r.amountMl}ml` : ''}
+                    </p>
+                    {r.memo && (
+                      <p className="text-[11px] text-foreground/70 leading-snug truncate">
+                        {r.memo}
+                      </p>
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        {/* AI 메시지 생성 */}
         <div className="rounded-3xl bg-card shadow-card p-4 space-y-3">
           <div className="flex items-center gap-1.5">
             <Sparkles size={14} className="text-primary" />
-            <p className="font-bold text-sm">AI로 감사 메시지 생성</p>
+            <p className="font-bold text-sm">AI로 메시지 생성</p>
           </div>
           <div className="flex flex-wrap gap-1.5">
             {TONES.map((t) => (
@@ -141,28 +196,19 @@ export function ThankYouReportScreen() {
               <><Sparkles size={14} /> AI로 생성하기</>
             )}
           </button>
-        </div>
-
-        <div className="rounded-3xl bg-card shadow-card p-4 space-y-2">
-          <p className="font-bold text-sm">메시지 (선택)</p>
-          <textarea
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            placeholder="고마운 마음을 적어보세요"
-            rows={5}
-            className="w-full rounded-2xl bg-cream border border-border p-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary"
-          />
-          <div className="flex flex-wrap gap-1.5">
-            {QUICK_PHRASES.map((p) => (
-              <button
-                key={p}
-                onClick={() => setMessage((m) => (m ? `${m}\n${p}` : p))}
-                className="text-[11px] px-2.5 py-1 rounded-full bg-cream border border-border font-medium"
-              >
-                {p}
-              </button>
-            ))}
-          </div>
+          {message && (
+            <div className="rounded-2xl bg-mint/30 border border-mint/50 p-3">
+              <p className="text-[10px] font-bold tracking-wider text-mint-foreground mb-1">
+                AI가 생성한 메시지
+              </p>
+              <textarea
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                rows={4}
+                className="w-full bg-transparent text-sm leading-relaxed resize-none focus:outline-none"
+              />
+            </div>
+          )}
         </div>
       </div>
 
@@ -172,13 +218,13 @@ export function ThankYouReportScreen() {
           disabled={!message.trim()}
           className="w-full h-13 py-3.5 rounded-2xl bg-primary text-primary-foreground font-semibold shadow-soft flex items-center justify-center gap-2 disabled:opacity-50"
         >
-          <Send size={16} /> 수고리포트 보내기
+          <Send size={16} /> 메시지와 함께 보내기
         </button>
         <button
           onClick={() => send(true)}
           className="w-full h-12 rounded-2xl bg-card border border-border font-semibold text-sm"
         >
-          메시지 없이 건너뛰기
+          기록만 보내기
         </button>
       </div>
     </div>
