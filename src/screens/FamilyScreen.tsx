@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useApp } from '@/state/app-state';
 import { createInvite } from '@/lib/api';
 import type { UserRole } from '@/lib/types';
-import { Copy, Link2, LogOut, Plus, Users } from 'lucide-react';
+import { Copy, Heart, Link2, LogOut, Plus, Users } from 'lucide-react';
 
 const roleLabel: Record<UserRole, string> = {
   PARENT_ADMIN: '관리자',
@@ -12,7 +12,7 @@ const roleLabel: Record<UserRole, string> = {
 };
 
 export function FamilyScreen() {
-  const { familyMembers, invite, setInvite, toast, navigate, currentUser, logout } = useApp();
+  const { familyMembers, invite, setInvite, toast, navigate, currentUser, logout, parentThankYouMessage, setParentThankYouMessage } = useApp();
   const [relationship, setRelationship] = useState('할머니');
   const [role, setRole] = useState<UserRole>('CAREGIVER_EDITOR');
 

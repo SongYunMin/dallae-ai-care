@@ -24,7 +24,7 @@ const BodySchema = z.object({
     sleep: z.number().int().min(0).max(99),
     medicine: z.number().int().min(0).max(99),
   }),
-  tone: ToneEnum,
+  tone: ToneEnum.optional().default("WARM"),
 });
 
 export const Route = createFileRoute("/api/thankyou")({
