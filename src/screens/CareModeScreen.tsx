@@ -246,82 +246,20 @@ export function CareModeScreen() {
             </p>
           </div>
         )}
-      </div>
-    </div>
-  );
-}
 
-function AgentHelperPanel() {
-  const { navigate, setPendingChatQuestion, notifications, child } = useApp();
-  const topTip =
-    notifications.find((n) => n.status === 'UNREAD' && n.type === 'CARE_PATTERN') ??
-    notifications.find((n) => n.status === 'UNREAD');
-
-  const askIon = (q: string) => {
-    setPendingChatQuestion(q);
-    navigate('chat');
-  };
-
-  return (
-    <div className="rounded-3xl gradient-mint shadow-card p-4 space-y-3 relative overflow-hidden">
-      <div className="absolute -right-3 -bottom-3 opacity-15 pointer-events-none">
-        <IonMascot variant="basic" size={120} />
-      </div>
-      <div className="relative flex items-center gap-2">
-        <span className="text-[10px] font-bold tracking-wider bg-foreground/85 text-background px-2 py-0.5 rounded-full flex items-center gap-1">
-          <Sparkles size={10} /> 아이온이 옆에서 도와드려요
-        </span>
-      </div>
-
-      {topTip && (
-        <div className="relative rounded-2xl bg-card/90 backdrop-blur p-3 space-y-1.5">
-          <div className="flex items-center gap-1.5">
-            <TrendingUp size={12} className="text-mint-foreground" />
-            <p className="text-[10px] font-bold tracking-wider text-mint-foreground">
-              지금 봐주세요
-            </p>
+        <div className="rounded-3xl bg-mint/30 border border-mint/50 p-4">
+          <p className="text-[11px] font-bold tracking-wider text-mint-foreground">꼭 지킬 가족 규칙</p>
+          <div className="mt-1.5 space-y-1">
+            {DEFAULT_RULES.map((r) => (
+              <p key={r} className="text-xs leading-snug">• {r}</p>
+            ))}
           </div>
-          <p className="text-sm font-bold leading-snug">{topTip.title}</p>
-          <p className="text-[11px] text-foreground/75 leading-relaxed">{topTip.message}</p>
-          {topTip.evidence && (
-            <p className="text-[10px] text-muted-foreground flex items-start gap-1 pt-0.5">
-              <ClipboardList size={10} className="mt-0.5 shrink-0" />
-              {topTip.evidence}
-            </p>
-          )}
-        </div>
-      )}
-
-      <div className="relative space-y-2">
-        <p className="text-[11px] font-bold text-foreground/70">
-          {child.name}이 기록을 바탕으로 빠르게 물어보세요
-        </p>
-        <div className="flex flex-wrap gap-1.5">
-          {QUICK_CAREGIVER_QUESTIONS.map((q) => (
-            <button
-              key={q}
-              onClick={() => askIon(q)}
-              className="text-[12px] px-3 py-1.5 rounded-full bg-card/90 border border-border shadow-card font-medium active:scale-95 transition-transform"
-            >
-              {q}
-            </button>
-          ))}
         </div>
       </div>
-
-      <button
-        onClick={() => navigate('chat')}
-        className="relative w-full h-12 rounded-2xl bg-foreground text-background font-bold text-sm flex items-center justify-center gap-2 shadow-soft active:scale-[0.98] transition-transform"
-      >
-        <MessageCircle size={16} />
-        아이온에게 직접 물어보기
-        <Send size={14} />
-      </button>
     </div>
   );
 }
 
-function whenLabel(targetMs: number): string {
   const diffMin = Math.round((targetMs - Date.now()) / 60000);
   if (diffMin <= 0) return '지금';
   if (diffMin < 60) return `${diffMin}분 뒤`;
