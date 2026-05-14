@@ -45,9 +45,11 @@ export function CareModeScreen() {
     navigate,
     records,
     checklist,
+    setChildMood,
   } = useApp();
   const [text, setText] = useState("");
   const [tick, setTick] = useState(0);
+  const [moodOpen, setMoodOpen] = useState(false);
 
   useEffect(() => {
     if (!session) return;
