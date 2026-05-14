@@ -18,7 +18,7 @@ const quick: { type: CareRecordType; label: string }[] = [
 ];
 
 export function CareModeScreen() {
-  const { session, startSession, endSession, addRecord, currentUser, toast, navigate, child, records, checklist } = useApp();
+  const { session, startSession, endSession, addRecord, addThankYouReport, parentThankYouMessage, child, currentUser, toast, navigate, records, checklist } = useApp();
   const [text, setText] = useState('');
   const [tick, setTick] = useState(0);
 
@@ -175,22 +175,77 @@ export function CareModeScreen() {
         {session.caregiverId === currentUser.id ? (
           <button
             onClick={async () => {
-              if (typeof window !== 'undefined' && !window.confirm('돌봄을 종료할까요?')) return;
+              if (typeof window !== 'undefined' && !window.confirm('돌봄을 종료할까요? 부모님께 감사 메시지가 전달돼요.')) return;
               const ended = endSession();
               if (!ended) return;
+              const sessionRecords = records.filter(
+                (r) => new Date(r.at).getTime() >= new Date(ended.startedAt).getTime(),
+              );
               const counts = {
-                feeding: records.filter((r) => r.type === 'FEEDING').length,
-                diaper: records.filter((r) => r.type === 'DIAPER').length,
-                sleep: records.filter((r) => r.type.startsWith('SLEEP')).length,
-                medicine: records.filter((r) => r.type === 'MEDICINE').length,
-                voiceNotes: records.filter((r) => r.source === 'VOICE').length,
+                feeding: sessionRecords.filter((r) => r.type === 'FEEDING').length,
+                diaper: sessionRecords.filter((r) => r.type === 'DIAPER').length,
+                sleep: sessionRecords.filter((r) => r.type.startsWith('SLEEP')).length,
+                medicine: sessionRecords.filter((r) => r.type === 'MEDICINE').length,
+                voiceNotes: sessionRecords.filter((r) => r.source === 'VOICE').length,
               };
+              const durationLabel = formatDuration(ended.startedAt, ended.endedAt);
               await endCareSession(ended.id, ended.startedAt, counts);
+
+              const preset = parentThankYouMessage.trim();
+              let message = preset;
+              let aiGenerated = false;
+              if (!message) {
+                try {
+                  const res = await fetch('/api/thankyou', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      caregiverName: ended.caregiverName,
+                      childName: child.name,
+                      durationLabel,
+                      counts: {
+                        feeding: counts.feeding,
+                        diaper: counts.diaper,
+                        sleep: counts.sleep,
+                        medicine: counts.medicine,
+                      },
+                    }),
+                  });
+                  if (res.ok) {
+                    const data = (await res.json()) as { message: string };
+                    message = data.message;
+                    aiGenerated = true;
+                  }
+                } catch {
+                  /* fall through */
+                }
+                if (!message) {
+                  message = `${ended.caregiverName}님, 오늘 ${child.name} 돌봐주셔서 정말 감사해요. 덕분에 안심하고 하루를 보냈어요.`;
+                  aiGenerated = true;
+                }
+              }
+
+              addThankYouReport({
+                id: `thx_${Date.now().toString(36)}`,
+                sessionId: ended.id,
+                fromUserId: 'user_parent_1',
+                fromUserName: aiGenerated ? '부모님 (AI 작성)' : '부모님',
+                toCaregiverName: ended.caregiverName,
+                message,
+                durationLabel,
+                counts: {
+                  feeding: counts.feeding,
+                  diaper: counts.diaper,
+                  sleep: counts.sleep,
+                  medicine: counts.medicine,
+                },
+                sentAt: new Date().toISOString(),
+              });
               navigate('thankYouReport');
             }}
             className="w-full h-14 rounded-2xl bg-coral text-coral-foreground font-semibold shadow-soft"
           >
-            돌봄 종료하고 리포트 쓰기
+            돌봄 종료하기
           </button>
         ) : (
           <div className="w-full rounded-2xl bg-muted/60 border border-border p-4 text-center">
@@ -198,7 +253,7 @@ export function CareModeScreen() {
               돌봄 종료는 {session.caregiverName}님만 할 수 있어요
             </p>
             <p className="text-xs text-muted-foreground mt-1">
-              지금 돌보고 있는 분이 직접 종료하고 리포트를 작성합니다.
+              지금 돌보고 있는 분이 직접 종료하면 부모님이 준비한 감사 메시지가 전달돼요.
             </p>
           </div>
         )}
