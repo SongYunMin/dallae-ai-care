@@ -72,7 +72,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
   head: () => ({
     meta: [
       { charSet: "utf-8" },
-      { name: "viewport", content: "width=device-width, initial-scale=1, maximum-scale=1" },
+      { name: "viewport", content: "width=device-width, initial-scale=1" },
       { title: "달래 — AI 돌봄 에이전트" },
       { name: "description", content: "아이를 함께 돌보는 AI 돌봄 에이전트, 달래." },
       { name: "author", content: "Dallae" },
@@ -83,6 +83,13 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "twitter:site", content: "@dallae" },
     ],
     links: [
+      // 전역 한글 폰트는 head에서 먼저 로드해 화면 진입 시 폰트 교체 흔들림을 줄인다.
+      { rel: "preconnect", href: "https://fonts.googleapis.com" },
+      { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
+      {
+        rel: "stylesheet",
+        href: "https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=Jua&display=swap",
+      },
       {
         rel: "stylesheet",
         href: appCss,

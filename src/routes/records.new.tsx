@@ -1,5 +1,4 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { ScreenRoute } from '@/components/ScreenRoute';
 import { RecordNewScreen } from '@/screens/RecordsScreen';
 
 export const Route = createFileRoute('/records/new')({
@@ -7,9 +6,5 @@ export const Route = createFileRoute('/records/new')({
 });
 
 function NewRecordRoute() {
-  return (
-    <ScreenRoute>
-      <RecordNewScreen />
-    </ScreenRoute>
-  );
+  return <RecordNewScreen />;
 }

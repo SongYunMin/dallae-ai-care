@@ -31,7 +31,7 @@ export function SplashScreen() {
           <IonMascot variant="basic" size={200} />
         </div>
         <div className="space-y-2">
-          <h1 className="text-4xl font-bold tracking-tight text-foreground">달래</h1>
+          <h1 className="text-4xl font-bold tracking-tight text-foreground">아이온</h1>
           <p className="text-base text-foreground/80 font-medium">
             아이를 함께 돌보는 AI 돌봄 에이전트
           </p>

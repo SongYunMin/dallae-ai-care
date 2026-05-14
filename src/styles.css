@@ -43,6 +43,8 @@
 
 :root {
   --radius: 1.1rem;
+  --font-sans: 'Gowun Dodum', 'Noto Sans KR', 'Apple SD Gothic Neo', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --font-display: 'Jua', var(--font-sans);
   /* Warm cream palette */
   --background: oklch(0.98 0.018 90);
   --foreground: oklch(0.28 0.04 60);
@@ -93,7 +95,83 @@
 @layer base {
   * { border-color: var(--color-border); }
   html, body { background: oklch(0.94 0.025 80); color: var(--color-foreground); }
-  body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', system-ui, sans-serif; }
+  body {
+    margin: 0;
+    font-family: var(--font-sans);
+    font-size: 16px;
+    line-height: 1.55;
+    letter-spacing: 0;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  h1, h2, h3, .font-display {
+    font-family: var(--font-display);
+    letter-spacing: 0;
+  }
+
+  button, input, textarea, select {
+    font: inherit;
+    letter-spacing: 0;
+  }
+
+  textarea {
+    line-height: 1.6;
+  }
+}
+
+@layer components {
+  /* 돌봄 정보 입력 화면 전반에서 라벨과 입력값의 숨 쉴 공간을 동일하게 유지한다. */
+  .ion-field {
+    display: block;
+  }
+
+  .ion-field-label {
+    display: block;
+    margin-bottom: 0.55rem;
+    color: color-mix(in oklch, var(--foreground) 88%, transparent);
+    font-size: 0.875rem;
+    font-weight: 700;
+    line-height: 1.45;
+  }
+
+  .ion-control {
+    width: 100%;
+    border: 1px solid var(--border);
+    border-radius: 1rem;
+    background: var(--card);
+    color: var(--foreground);
+    box-shadow: inset 0 1px 0 oklch(1 0 0 / 0.75);
+    transition:
+      background-color 160ms ease,
+      border-color 160ms ease,
+      box-shadow 160ms ease;
+  }
+
+  .ion-control::placeholder {
+    color: var(--muted-foreground);
+    opacity: 0.8;
+  }
+
+  .ion-control:focus {
+    border-color: var(--primary);
+    box-shadow:
+      0 0 0 3px oklch(0.74 0.15 70 / 0.22),
+      inset 0 1px 0 oklch(1 0 0 / 0.85);
+    outline: none;
+  }
+
+  .ion-input {
+    min-height: 3rem;
+    padding: 0.7rem 1rem;
+  }
+
+  .ion-textarea {
+    min-height: 5.5rem;
+    padding: 0.95rem 1rem;
+    resize: vertical;
+  }
 }
 
 @layer utilities {

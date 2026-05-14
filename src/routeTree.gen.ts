@@ -18,6 +18,7 @@ import { Route as ChecklistRouteImport } from './routes/checklist'
 import { Route as ChatRouteImport } from './routes/chat'
 import { Route as CareModeRouteImport } from './routes/care-mode'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as RecordsIndexRouteImport } from './routes/records.index'
 import { Route as ReportsCareSessionIdRouteImport } from './routes/reports/$careSessionId'
 import { Route as RecordsNewRouteImport } from './routes/records.new'
 import { Route as OnboardingParentRouteImport } from './routes/onboarding/parent'
@@ -71,6 +72,11 @@ const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
+} as any)
+const RecordsIndexRoute = RecordsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => RecordsRoute,
 } as any)
 const ReportsCareSessionIdRoute = ReportsCareSessionIdRouteImport.update({
   id: '/reports/$careSessionId',
@@ -131,6 +137,7 @@ export interface FileRoutesByFullPath {
   '/onboarding/parent': typeof OnboardingParentRoute
   '/records/new': typeof RecordsNewRoute
   '/reports/$careSessionId': typeof ReportsCareSessionIdRouteWithChildren
+  '/records/': typeof RecordsIndexRoute
   '/reports/$careSessionId/thank-you': typeof ReportsCareSessionIdThankYouRoute
   '/reports/$careSessionId/': typeof ReportsCareSessionIdIndexRoute
 }
@@ -142,13 +149,13 @@ export interface FileRoutesByTo {
   '/dashboard': typeof DashboardRoute
   '/family': typeof FamilyRoute
   '/notifications': typeof NotificationsRoute
-  '/records': typeof RecordsRouteWithChildren
   '/rules': typeof RulesRoute
   '/api/agent': typeof ApiAgentRoute
   '/api/thankyou': typeof ApiThankyouRoute
   '/invite/$token': typeof InviteTokenRoute
   '/onboarding/parent': typeof OnboardingParentRoute
   '/records/new': typeof RecordsNewRoute
+  '/records': typeof RecordsIndexRoute
   '/reports/$careSessionId/thank-you': typeof ReportsCareSessionIdThankYouRoute
   '/reports/$careSessionId': typeof ReportsCareSessionIdIndexRoute
 }
@@ -169,6 +176,7 @@ export interface FileRoutesById {
   '/onboarding/parent': typeof OnboardingParentRoute
   '/records/new': typeof RecordsNewRoute
   '/reports/$careSessionId': typeof ReportsCareSessionIdRouteWithChildren
+  '/records/': typeof RecordsIndexRoute
   '/reports/$careSessionId/thank-you': typeof ReportsCareSessionIdThankYouRoute
   '/reports/$careSessionId/': typeof ReportsCareSessionIdIndexRoute
 }
@@ -190,6 +198,7 @@ export interface FileRouteTypes {
     | '/onboarding/parent'
     | '/records/new'
     | '/reports/$careSessionId'
+    | '/records/'
     | '/reports/$careSessionId/thank-you'
     | '/reports/$careSessionId/'
   fileRoutesByTo: FileRoutesByTo
@@ -201,13 +210,13 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/family'
     | '/notifications'
-    | '/records'
     | '/rules'
     | '/api/agent'
     | '/api/thankyou'
     | '/invite/$token'
     | '/onboarding/parent'
     | '/records/new'
+    | '/records'
     | '/reports/$careSessionId/thank-you'
     | '/reports/$careSessionId'
   id:
@@ -227,6 +236,7 @@ export interface FileRouteTypes {
     | '/onboarding/parent'
     | '/records/new'
     | '/reports/$careSessionId'
+    | '/records/'
     | '/reports/$careSessionId/thank-you'
     | '/reports/$careSessionId/'
   fileRoutesById: FileRoutesById
@@ -313,6 +323,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/records/': {
+      id: '/records/'
+      path: '/'
+      fullPath: '/records/'
+      preLoaderRoute: typeof RecordsIndexRouteImport
+      parentRoute: typeof RecordsRoute
+    }
     '/reports/$careSessionId': {
       id: '/reports/$careSessionId'
       path: '/reports/$careSessionId'
@@ -374,10 +391,12 @@ declare module '@tanstack/react-router' {
 
 interface RecordsRouteChildren {
   RecordsNewRoute: typeof RecordsNewRoute
+  RecordsIndexRoute: typeof RecordsIndexRoute
 }
 
 const RecordsRouteChildren: RecordsRouteChildren = {
   RecordsNewRoute: RecordsNewRoute,
+  RecordsIndexRoute: RecordsIndexRoute,
 }
 
 const RecordsRouteWithChildren =

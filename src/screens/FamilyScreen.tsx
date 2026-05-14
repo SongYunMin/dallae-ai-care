@@ -202,7 +202,7 @@ export function FamilyScreen() {
           </div>
 
           {editingChild ? (
-            <div className="space-y-3">
+            <div className="space-y-4">
               <Field label="아이 이름">
                 <input
                   value={childDraft.name}
@@ -219,7 +219,7 @@ export function FamilyScreen() {
                 />
               </Field>
               <div>
-                <p className="text-xs font-semibold mb-1">수유 방식</p>
+                <p className="ion-field-label">수유 방식</p>
                 <div className="grid grid-cols-2 gap-2">
                   {feedingOptions.map((option) => (
                     <button
@@ -247,21 +247,21 @@ export function FamilyScreen() {
                 <textarea
                   value={childDraft.medicalNotes}
                   onChange={(e) => setChildDraft((draft) => ({ ...draft, medicalNotes: e.target.value }))}
-                  className={`${inputCls} min-h-[72px] py-3`}
+                  className={textareaCls}
                 />
               </Field>
               <Field label="기본 수면·수유 루틴">
                 <textarea
                   value={childDraft.routineNotes}
                   onChange={(e) => setChildDraft((draft) => ({ ...draft, routineNotes: e.target.value }))}
-                  className={`${inputCls} min-h-[72px] py-3`}
+                  className={textareaCls}
                 />
               </Field>
               <Field label="돌봄 메모">
                 <textarea
                   value={childDraft.careNotes}
                   onChange={(e) => setChildDraft((draft) => ({ ...draft, careNotes: e.target.value }))}
-                  className={`${inputCls} min-h-[72px] py-3`}
+                  className={textareaCls}
                 />
               </Field>
               <button
@@ -389,16 +389,16 @@ export function FamilyScreen() {
             <Link2 size={16} className="text-primary" />
             <h2 className="font-bold text-sm">초대 링크 만들기</h2>
           </div>
-          <label className="block">
-            <span className="text-xs font-semibold">관계</span>
+          <label className="ion-field">
+            <span className="ion-field-label text-xs">관계</span>
             <input
               value={relationship}
               onChange={(e) => setRelationship(e.target.value)}
-              className="mt-1 w-full h-11 px-3 rounded-xl bg-cream border border-border text-sm"
+              className={inputCls}
             />
           </label>
           <div>
-            <p className="text-xs font-semibold mb-1">권한</p>
+            <p className="ion-field-label text-xs">권한</p>
             <div className="grid grid-cols-2 gap-2">
               <button
                 onClick={() => setRole('CAREGIVER_EDITOR')}
@@ -418,8 +418,8 @@ export function FamilyScreen() {
               </button>
             </div>
           </div>
-          <label className="block">
-            <span className="text-xs font-semibold flex items-center gap-1">
+          <label className="ion-field">
+            <span className="ion-field-label text-xs flex items-center gap-1">
               <Heart size={13} className="text-coral-foreground" />
               돌봄 종료 감사 메시지
             </span>
@@ -428,7 +428,7 @@ export function FamilyScreen() {
               onChange={(e) => setParentThankYouMessage(e.target.value)}
               rows={4}
               placeholder="예) 오늘도 우리 아이 돌봐주셔서 정말 감사해요. 덕분에 마음 놓고 일할 수 있었어요."
-              className="mt-1 w-full p-3 rounded-xl bg-cream border border-border text-sm leading-relaxed resize-none focus:outline-none"
+              className={`${textareaCls} resize-none`}
             />
             <span className="block text-[10px] text-muted-foreground text-right mt-1">
               {parentThankYouMessage.trim().length === 0
@@ -487,12 +487,13 @@ export function FamilyScreen() {
   );
 }
 
-const inputCls = 'w-full h-10 px-3 rounded-xl bg-cream border border-border text-sm focus:outline-none';
+const inputCls = 'ion-control ion-input bg-cream/70 text-sm';
+const textareaCls = 'ion-control ion-textarea bg-cream/70 text-sm';
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <label className="block space-y-1">
-      <span className="text-xs font-semibold">{label}</span>
+    <label className="ion-field">
+      <span className="ion-field-label text-xs">{label}</span>
       {children}
     </label>
   );

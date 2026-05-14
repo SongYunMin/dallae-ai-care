@@ -281,7 +281,7 @@ function RecordForm({
   return (
     <div className={compact ? 'space-y-3' : 'px-5 space-y-4 pb-32'}>
       <div>
-        <p className="text-sm font-semibold mb-2">기록 종류</p>
+        <p className="ion-field-label mb-2">기록 종류</p>
         <div className="grid grid-cols-3 gap-2">
           {(Object.keys(recordMeta) as CareRecordType[]).map((t) => (
             <button
@@ -297,24 +297,24 @@ function RecordForm({
         </div>
       </div>
       {draft.type === 'FEEDING' && (
-        <label className="block">
-          <span className="text-sm font-semibold">양 (ml)</span>
+        <label className="ion-field">
+          <span className="ion-field-label">양 (ml)</span>
           <input
             type="number"
             value={draft.amount}
             onChange={(e) => onChange({ ...draft, amount: e.target.value })}
             placeholder="예: 160"
-            className="mt-1.5 w-full h-12 px-4 rounded-xl bg-card border border-border"
+            className="ion-control ion-input"
           />
         </label>
       )}
-      <label className="block">
-        <span className="text-sm font-semibold">메모</span>
+      <label className="ion-field">
+        <span className="ion-field-label">메모</span>
         <textarea
           value={draft.memo}
           onChange={(e) => onChange({ ...draft, memo: e.target.value })}
           placeholder="간단한 상황을 적어주세요"
-          className="mt-1.5 w-full min-h-[100px] px-4 py-3 rounded-xl bg-card border border-border"
+          className="ion-control ion-textarea min-h-[104px]"
         />
       </label>
     </div>

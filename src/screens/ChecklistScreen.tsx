@@ -185,30 +185,30 @@ function NewItemForm({
       className="rounded-3xl bg-card shadow-card p-4 space-y-3"
     >
       <div className="grid grid-cols-2 gap-2">
-        <label className="text-[11px] font-semibold text-foreground/70 space-y-1">
-          <span>날짜</span>
+        <label className="ion-field">
+          <span className="ion-field-label text-[11px]">날짜</span>
           <input
             type="date"
             value={date}
             onChange={(e) => setDate(e.target.value)}
-            className="w-full h-11 rounded-xl border border-border bg-background px-3 text-sm font-medium"
+            className="ion-control ion-input min-h-11 bg-background text-sm font-medium"
             required
           />
         </label>
-        <label className="text-[11px] font-semibold text-foreground/70 space-y-1">
-          <span>시간</span>
+        <label className="ion-field">
+          <span className="ion-field-label text-[11px]">시간</span>
           <input
             type="time"
             value={time}
             onChange={(e) => setTime(e.target.value)}
-            className="w-full h-11 rounded-xl border border-border bg-background px-3 text-sm font-medium"
+            className="ion-control ion-input min-h-11 bg-background text-sm font-medium"
             required
           />
         </label>
       </div>
 
       <div className="space-y-1">
-        <p className="text-[11px] font-semibold text-foreground/70">유형</p>
+        <p className="ion-field-label text-[11px]">유형</p>
         <div className="flex flex-wrap gap-1.5">
           {(Object.keys(KIND_META) as ChecklistKind[]).map((k) => {
             const meta = KIND_META[k];
@@ -229,14 +229,14 @@ function NewItemForm({
         </div>
       </div>
 
-      <label className="text-[11px] font-semibold text-foreground/70 space-y-1 block">
-        <span>해야 할 일</span>
+      <label className="ion-field">
+        <span className="ion-field-label text-[11px]">해야 할 일</span>
         <input
           type="text"
           value={label}
           onChange={(e) => setLabel(e.target.value)}
           placeholder="예: 분유 160ml 먹이기"
-          className="w-full h-11 rounded-xl border border-border bg-background px-3 text-sm font-medium"
+          className="ion-control ion-input min-h-11 bg-background text-sm font-medium"
           required
         />
       </label>

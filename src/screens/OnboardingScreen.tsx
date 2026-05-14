@@ -46,14 +46,14 @@ export function OnboardingScreen() {
 
   return (
     <div className="min-h-dvh flex flex-col">
-      <header className="px-4 pt-6 pb-2 flex items-center gap-2">
+      <header className="px-4 pt-8 pb-3 flex items-center gap-2">
         <button onClick={() => navigate('splash')} className="p-2 -ml-2 text-muted-foreground">
           <ChevronLeft size={24} />
         </button>
-        <h1 className="text-lg font-bold">아이 정보 등록</h1>
+        <h1 className="text-xl font-bold">아이 정보 등록</h1>
       </header>
 
-      <div className="px-5 pb-3 flex items-center gap-3">
+      <div className="px-5 pb-5 flex items-center gap-3">
         <IonMascot variant="wink" size={64} />
         <p className="text-sm text-muted-foreground leading-snug">
           아이온이 돌봄을 도울 수 있도록
@@ -62,7 +62,7 @@ export function OnboardingScreen() {
         </p>
       </div>
 
-      <div className="flex-1 px-5 pb-32 space-y-4">
+      <div className="flex-1 px-5 pb-32 space-y-5">
         <Field label="보호자 이름">
           <input value={parentName} onChange={(e) => setParentName(e.target.value)} className={inputCls} />
         </Field>
@@ -93,10 +93,10 @@ export function OnboardingScreen() {
           <input value={allergies} onChange={(e) => setAllergies(e.target.value)} className={inputCls} />
         </Field>
         <Field label="복용 중인 약 / 의료 메모">
-          <textarea value={medical} onChange={(e) => setMedical(e.target.value)} className={`${inputCls} min-h-[72px]`} />
+          <textarea value={medical} onChange={(e) => setMedical(e.target.value)} className={textareaCls} />
         </Field>
         <Field label="기본 수면·수유 루틴">
-          <textarea value={routine} onChange={(e) => setRoutine(e.target.value)} className={`${inputCls} min-h-[72px]`} />
+          <textarea value={routine} onChange={(e) => setRoutine(e.target.value)} className={textareaCls} />
         </Field>
         <Field label="우리 집 돌봄 규칙">
           <input value={careNote} onChange={(e) => setCareNote(e.target.value)} className={inputCls} />
@@ -125,13 +125,13 @@ export function OnboardingScreen() {
   );
 }
 
-const inputCls =
-  'w-full h-12 px-4 rounded-xl bg-card border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30';
+const inputCls = 'ion-control ion-input';
+const textareaCls = 'ion-control ion-textarea';
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <label className="block space-y-1.5">
-      <span className="text-sm font-semibold text-foreground/90">{label}</span>
+    <label className="ion-field">
+      <span className="ion-field-label">{label}</span>
       {children}
     </label>
   );
