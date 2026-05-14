@@ -2,12 +2,15 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "@/state/app-state";
 import { IonMascot } from "@/components/IonMascot";
 import { CHAT_SUGGESTIONS, DEFAULT_RULES } from "@/lib/mock-data";
+import type { ChatMessage } from "@/lib/types";
 import { Send, ShieldCheck } from "lucide-react";
-import { useChat } from "@ai-sdk/react";
-import { DefaultChatTransport, type UIMessage } from "ai";
+
+type AgentReply = { reply: string };
 
 export function ChatScreen() {
   const {
+    chatMessages,
+    addChatMessage,
     currentUser,
     child,
     pendingChatQuestion,
@@ -20,62 +23,84 @@ export function ChatScreen() {
     session,
   } = useApp();
   const [text, setText] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const scrollerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const context = useMemo(() => {
-    const recent = records.slice(0, 20).map((r) => ({
-      type: r.type,
-      at: r.at,
-      memo: r.memo,
-      amountMl: r.amountMl,
-      by: r.recordedBy,
-    }));
-    const todayChecklist = checklist.slice(0, 30).map((c) => ({
-      date: c.date,
-      time: c.time,
-      label: c.label,
-      kind: c.kind,
-      done: c.completed,
-    }));
-    return {
-      child: { name: child.name, ageMonths: child.ageInMonths, feedingType: child.feedingType },
+  const context = useMemo(
+    () => ({
+      child: {
+        name: child.name,
+        ageMonths: child.ageInMonths,
+        feedingType: child.feedingType,
+      },
       currentUser: { name: currentUser.name, role: currentUser.role },
       session: session
         ? { caregiver: session.caregiverName, startedAt: session.startedAt }
         : null,
       childMood,
       familyRules: [...DEFAULT_RULES, ...parentRules],
-      recentRecords: recent,
-      checklist: todayChecklist,
+      recentRecords: records.slice(0, 30).map((r) => ({
+        type: r.type,
+        at: r.at,
+        memo: r.memo,
+        amountMl: r.amountMl,
+        by: r.recordedBy,
+      })),
+      checklist: checklist.slice(0, 30).map((c) => ({
+        date: c.date,
+        time: c.time,
+        label: c.label,
+        kind: c.kind,
+        done: c.completed,
+      })),
       recentNotifications: notifications.slice(0, 5).map((n) => ({
         title: n.title,
         message: n.message,
       })),
       now: new Date().toISOString(),
-    };
-  }, [records, checklist, parentRules, child, currentUser, session, childMood, notifications]);
-
-  const transport = useMemo(
-    () =>
-      new DefaultChatTransport({
-        api: "/api/chat",
-        body: () => ({ context }),
-      }),
-    [context],
+    }),
+    [records, checklist, parentRules, child, currentUser, session, childMood, notifications],
   );
-
-  const { messages, sendMessage, status, error } = useChat({
-    id: "ion-chat",
-    transport,
-  });
 
   const send = async (q: string) => {
     const trimmed = q.trim();
-    if (!trimmed || status === "submitted" || status === "streaming") return;
+    if (!trimmed || loading) return;
+    const userMsg: ChatMessage = {
+      id: "u" + Date.now(),
+      role: "user",
+      text: trimmed,
+      at: new Date().toISOString(),
+    };
+    addChatMessage(userMsg);
     setText("");
-    await sendMessage({ text: trimmed });
-    inputRef.current?.focus();
+    setLoading(true);
+    setError(null);
+    try {
+      const history = [...chatMessages, userMsg].map((m) => ({
+        role: m.role,
+        text: m.text ?? m.response?.answer ?? "",
+      }));
+      const res = await fetch("/api/agent", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ messages: history, context }),
+      });
+      if (!res.ok) throw new Error(`agent ${res.status}`);
+      const data = (await res.json()) as AgentReply;
+      addChatMessage({
+        id: "a" + Date.now(),
+        role: "agent",
+        text: data.reply,
+        at: new Date().toISOString(),
+      });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "오류");
+    } finally {
+      setLoading(false);
+      inputRef.current?.focus();
+    }
   };
 
   useEffect(() => {
@@ -91,13 +116,11 @@ export function ChatScreen() {
       top: scrollerRef.current.scrollHeight,
       behavior: "smooth",
     });
-  }, [messages, status]);
+  }, [chatMessages, loading]);
 
   useEffect(() => {
     inputRef.current?.focus();
   }, []);
-
-  const isLoading = status === "submitted" || status === "streaming";
 
   return (
     <div className="flex flex-col h-full min-h-0">
@@ -132,7 +155,7 @@ export function ChatScreen() {
         ref={scrollerRef}
         className="flex-1 min-h-0 px-4 py-4 space-y-3 overflow-y-auto"
       >
-        {messages.length === 0 && (
+        {chatMessages.length === 0 && (
           <div className="space-y-4">
             <div className="rounded-2xl bg-mint/30 border border-mint/40 p-3">
               <div className="flex items-start gap-2">
@@ -165,15 +188,13 @@ export function ChatScreen() {
           </div>
         )}
 
-        {messages.map((m: UIMessage) => {
-          const text = m.parts
-            .map((p) => (p.type === "text" ? p.text : ""))
-            .join("");
+        {chatMessages.map((m) => {
+          const body = m.text ?? m.response?.answer ?? "";
           if (m.role === "user") {
             return (
               <div key={m.id} className="flex justify-end">
                 <div className="max-w-[80%] rounded-2xl rounded-tr-sm bg-primary text-primary-foreground px-4 py-2.5 text-sm whitespace-pre-wrap">
-                  {text}
+                  {body}
                 </div>
               </div>
             );
@@ -182,13 +203,13 @@ export function ChatScreen() {
             <div key={m.id} className="flex items-start gap-2">
               <IonMascot variant="basic" size={32} />
               <div className="flex-1 max-w-[88%] rounded-2xl rounded-tl-sm bg-card border border-border px-4 py-2.5 text-sm whitespace-pre-wrap leading-relaxed">
-                {text || <span className="text-muted-foreground">...</span>}
+                {body}
               </div>
             </div>
           );
         })}
 
-        {isLoading && messages[messages.length - 1]?.role !== "assistant" && (
+        {loading && (
           <div className="flex items-end gap-2">
             <IonMascot variant="basic" size={32} />
             <div className="rounded-2xl bg-card border border-border px-4 py-3 text-sm text-muted-foreground">
@@ -199,7 +220,7 @@ export function ChatScreen() {
 
         {error && (
           <div className="rounded-2xl bg-coral/30 border border-coral/50 px-4 py-3 text-xs text-foreground">
-            오류가 발생했어요. 잠시 후 다시 시도해 주세요.
+            오류: {error}
           </div>
         )}
       </div>
@@ -221,7 +242,7 @@ export function ChatScreen() {
           />
           <button
             onClick={() => send(text)}
-            disabled={isLoading || !text.trim()}
+            disabled={loading || !text.trim()}
             className="h-12 w-12 rounded-full bg-primary text-primary-foreground flex items-center justify-center disabled:opacity-50"
             aria-label="전송"
           >
