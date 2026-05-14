@@ -322,8 +322,6 @@ function BabyStatusCard({
   records,
   checklist,
 }: {
-  caregiverName: string;
-  childName: string;
   records: CareRecord[];
   checklist: ChecklistItem[];
 }) {
