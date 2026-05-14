@@ -260,6 +260,7 @@ export function CareModeScreen() {
   );
 }
 
+function whenLabel(targetMs: number): string {
   const diffMin = Math.round((targetMs - Date.now()) / 60000);
   if (diffMin <= 0) return '지금';
   if (diffMin < 60) return `${diffMin}분 뒤`;
