@@ -12,7 +12,7 @@ export function MobileShell({
   children: ReactNode;
   hideNav?: boolean;
 }) {
-  const { toasts, screen, canGoBack, goBack, navigate } = useApp();
+  const { screen, canGoBack, goBack, navigate } = useApp();
   const isTab = TAB_SCREENS.includes(screen);
   const showBack = !hideNav && !isTab && screen !== "splash" && screen !== "onboarding";
 
@@ -42,17 +42,6 @@ export function MobileShell({
           {children}
         </main>
         {!hideNav && <BottomNav />}
-        {/* toasts */}
-        <div className="pointer-events-none absolute inset-x-0 bottom-24 mx-auto max-w-[430px] flex flex-col items-center gap-2 px-4 z-50">
-          {toasts.map((t) => (
-            <div
-              key={t.id}
-              className="pointer-events-auto rounded-full bg-foreground/90 text-background text-sm px-4 py-2 shadow-soft"
-            >
-              {t.text}
-            </div>
-          ))}
-        </div>
       </div>
     </div>
   );
