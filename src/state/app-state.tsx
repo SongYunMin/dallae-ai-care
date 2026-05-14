@@ -70,6 +70,11 @@ type AppState = {
 
   toasts: Toast[];
   toast: (text: string) => void;
+
+  checklist: ChecklistItem[];
+  addChecklistItem: (item: Omit<ChecklistItem, 'id' | 'completed' | 'createdBy'>) => void;
+  toggleChecklistItem: (id: string) => void;
+  removeChecklistItem: (id: string) => void;
 };
 
 const Ctx = createContext<AppState | null>(null);
