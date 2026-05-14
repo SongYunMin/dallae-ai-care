@@ -127,6 +127,29 @@ export function FamilyScreen() {
           )}
         </div>
 
+        <div className="rounded-3xl bg-card shadow-card p-4 space-y-2">
+          <div className="flex items-center gap-2">
+            <Heart size={16} className="text-coral-foreground" />
+            <h2 className="font-bold text-sm">돌봄 종료 시 보낼 감사 메시지</h2>
+          </div>
+          <p className="text-[11px] text-muted-foreground leading-relaxed">
+            돌봄이 끝나면 자동으로 전송돼요. 비워두면 AI가 대신 작성해 보냅니다.
+            돌봄 종료 전까지 언제든 수정할 수 있어요.
+          </p>
+          <textarea
+            value={parentThankYouMessage}
+            onChange={(e) => setParentThankYouMessage(e.target.value)}
+            rows={4}
+            placeholder="예) 오늘도 우리 아이 돌봐주셔서 정말 감사해요. 덕분에 마음 놓고 일할 수 있었어요."
+            className="w-full p-3 rounded-xl bg-cream border border-border text-sm leading-relaxed resize-none focus:outline-none"
+          />
+          <p className="text-[10px] text-muted-foreground text-right">
+            {parentThankYouMessage.trim().length === 0
+              ? 'AI가 자동으로 작성해 보내요'
+              : `${parentThankYouMessage.trim().length}자 · 직접 작성한 메시지로 보내요`}
+          </p>
+        </div>
+
         <div className="rounded-3xl bg-card shadow-card p-4">
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
