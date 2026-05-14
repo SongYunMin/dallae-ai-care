@@ -176,17 +176,8 @@ export function CareModeScreen() {
           </div>
         </div>
 
-        <button
-          onClick={() => navigate('chat')}
-          className="w-full rounded-3xl bg-card shadow-card p-4 flex items-center gap-3 active:scale-[0.99]"
-        >
-          <span className="rounded-2xl bg-sky/50 p-2 text-sky-foreground"><MessageCircle size={22} /></span>
-          <div className="flex-1 text-left">
-            <p className="font-bold text-sm">아이온에게 물어보기</p>
-            <p className="text-xs text-muted-foreground">기록과 규칙을 바탕으로 답해드려요</p>
-          </div>
-          <Sparkles size={16} className="text-primary" />
-        </button>
+        <AgentHelperPanel />
+
 
         <button
           onClick={async () => {
