@@ -129,10 +129,7 @@ export function RecordNewScreen() {
 
   return (
     <div className="flex flex-col">
-      <header className="px-4 pt-6 pb-2 flex items-center gap-2">
-        <button onClick={() => navigate('records')} className="p-2 -ml-2 text-muted-foreground">
-          <ChevronLeft size={24} />
-        </button>
+      <header className="px-4 pt-6 pb-2 flex items-center gap-2 pl-16">
         <h1 className="text-lg font-bold">새 기록</h1>
       </header>
       <div className="px-5 space-y-4 pb-32">
