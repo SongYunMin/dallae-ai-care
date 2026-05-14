@@ -84,6 +84,9 @@ type AppState = {
 
   thankYouReports: ThankYouReport[];
   addThankYouReport: (r: ThankYouReport) => void;
+
+  childMood: { emoji: string; label: string; at: string } | null;
+  setChildMood: (m: { emoji: string; label: string } | null) => void;
 };
 
 const Ctx = createContext<AppState | null>(null);
@@ -111,6 +114,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [checklist, setChecklist] = useState<ChecklistItem[]>(() => makeMockChecklist('user_parent_1'));
   const [thankYouReports, setThankYouReports] = useState<ThankYouReport[]>([]);
   const [parentThankYouMessage, setParentThankYouMessage] = useState<string>('');
+  const [childMood, setChildMoodState] = useState<{ emoji: string; label: string; at: string } | null>(null);
 
   const navigate = useCallback((s: Screen, p?: unknown) => {
     setPayload(p ?? null);
@@ -272,6 +276,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       };
       setNotifications((arr) => [noti, ...arr]);
     },
+    childMood,
+    setChildMood: (m) =>
+      setChildMoodState(m ? { ...m, at: new Date().toISOString() } : null),
   };
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

@@ -6,7 +6,7 @@ import { createCareRecord, endCareSession, parseTextToRecord, startCareSession }
 import { formatDuration, formatTime } from "@/lib/date";
 import { itemDateTime, todayKey, formatItemTime } from "@/lib/checklist";
 import type { CareRecord, CareRecordType, ChecklistItem } from "@/lib/types";
-import { Mic, Send } from "lucide-react";
+import { Mic, Send, X } from "lucide-react";
 
 const quick: { type: CareRecordType; label: string }[] = [
   { type: "FEEDING", label: "분유 먹였어요" },
@@ -14,7 +14,21 @@ const quick: { type: CareRecordType; label: string }[] = [
   { type: "SLEEP_START", label: "낮잠 시작" },
   { type: "SLEEP_END", label: "낮잠 종료" },
   { type: "MEDICINE", label: "약 먹였어요" },
-  { type: "CRYING", label: "울었어요" },
+];
+
+const MOOD_OPTIONS: { emoji: string; label: string }[] = [
+  { emoji: "😄", label: "기쁨" },
+  { emoji: "😊", label: "행복" },
+  { emoji: "😮", label: "놀람" },
+  { emoji: "😢", label: "슬픔" },
+  { emoji: "😭", label: "울음" },
+  { emoji: "😠", label: "화남" },
+  { emoji: "😴", label: "졸림" },
+  { emoji: "🤒", label: "아픔" },
+  { emoji: "🍔", label: "배고픔" },
+  { emoji: "❤️", label: "사랑" },
+  { emoji: "❓", label: "궁금" },
+  { emoji: "😌", label: "편안" },
 ];
 
 export function CareModeScreen() {
@@ -31,9 +45,11 @@ export function CareModeScreen() {
     navigate,
     records,
     checklist,
+    setChildMood,
   } = useApp();
   const [text, setText] = useState("");
   const [tick, setTick] = useState(0);
+  const [moodOpen, setMoodOpen] = useState(false);
 
   useEffect(() => {
     if (!session) return;
@@ -152,8 +168,63 @@ export function CareModeScreen() {
                 {q.label}
               </button>
             ))}
+            <button
+              onClick={() => setMoodOpen(true)}
+              className="h-14 rounded-2xl bg-mint/40 font-semibold text-sm active:scale-95 transition-transform"
+            >
+              😊 감정기록
+            </button>
           </div>
         </div>
+
+        {moodOpen && (
+          <div
+            className="fixed inset-0 z-50 bg-foreground/40 flex items-end justify-center"
+            onClick={() => setMoodOpen(false)}
+          >
+            <div
+              className="w-full max-w-md bg-card rounded-t-3xl p-5 pb-8 shadow-card"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-3">
+                <p className="font-bold">아이의 지금 감정은?</p>
+                <button
+                  onClick={() => setMoodOpen(false)}
+                  className="h-8 w-8 rounded-full bg-cream flex items-center justify-center"
+                  aria-label="닫기"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+              <p className="text-xs text-muted-foreground mb-3">
+                선택한 감정은 홈의 아이온 표정에도 반영돼요.
+              </p>
+              <div className="grid grid-cols-4 gap-2">
+                {MOOD_OPTIONS.map((m) => (
+                  <button
+                    key={m.label}
+                    onClick={async () => {
+                      setChildMood({ emoji: m.emoji, label: m.label });
+                      const r = await createCareRecord({
+                        type: "NOTE",
+                        recordedBy: currentUser.name,
+                        source: "MANUAL",
+                        memo: `감정: ${m.emoji} ${m.label}`,
+                      });
+                      addRecord(r);
+                      setMoodOpen(false);
+                      toast(`${m.emoji} ${m.label} · 감정 기록`);
+                    }}
+                    className="aspect-square rounded-2xl bg-cream flex flex-col items-center justify-center gap-0.5 active:scale-95 transition-transform"
+                  >
+                    <span className="text-2xl leading-none">{m.emoji}</span>
+                    <span className="text-[10px] font-semibold">{m.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="rounded-3xl bg-card shadow-card p-4 space-y-3">
           <div className="flex items-center justify-between">
