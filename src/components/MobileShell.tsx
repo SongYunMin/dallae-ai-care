@@ -8,9 +8,11 @@ const TAB_SCREENS: Screen[] = ["dashboard", "records", "careMode", "chat", "fami
 export function MobileShell({
   children,
   hideNav = false,
+  flushBottom = false,
 }: {
   children: ReactNode;
   hideNav?: boolean;
+  flushBottom?: boolean;
 }) {
   const { screen, canGoBack, goBack, navigate } = useApp();
   const isTab = TAB_SCREENS.includes(screen);
@@ -37,7 +39,7 @@ export function MobileShell({
           </button>
         )}
         <main
-          className={`flex-1 min-h-0 overflow-y-auto overscroll-contain ${hideNav ? "safe-bottom" : "with-bottom-nav-space"}`}
+          className={`flex-1 min-h-0 ${flushBottom ? "overflow-hidden" : "overflow-y-auto overscroll-contain"} ${hideNav ? "safe-bottom" : flushBottom ? "" : "with-bottom-nav-space"}`}
         >
           {children}
         </main>
