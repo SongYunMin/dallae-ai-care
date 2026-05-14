@@ -43,7 +43,15 @@ export function DashboardScreen() {
     setNotificationStatus,
     setPendingChatQuestion,
     parentRules,
+    checklist,
   } = useApp();
+
+  const today = todayKey();
+  const todayItems = checklist.filter((c) => c.date === today);
+  const now = Date.now();
+  const nextItem = todayItems.find((c) => !c.completed && itemDateTime(c).getTime() >= now)
+    ?? todayItems.find((c) => !c.completed);
+  const doneCount = todayItems.filter((c) => c.completed).length;
 
   const lastFeeding = records.find((r) => r.type === 'FEEDING');
   const lastSleep = records.find((r) => r.type === 'SLEEP_END' || r.type === 'SLEEP_START');
