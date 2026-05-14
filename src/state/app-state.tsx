@@ -1,9 +1,10 @@
-import { createContext, useContext, useState, useCallback, type ReactNode } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect, useRef, type ReactNode } from 'react';
 import type {
   AgentNotification,
   CareRecord,
   CareSession,
   ChatMessage,
+  ChecklistItem,
   FamilyMember,
   UserRole,
 } from '@/lib/types';
@@ -14,6 +15,7 @@ import {
   MOCK_RECORDS,
   PARENT_RULES,
 } from '@/lib/mock-data';
+import { itemDateTime, makeMockChecklist } from '@/lib/checklist';
 
 export type Screen =
   | 'splash'
@@ -27,7 +29,8 @@ export type Screen =
   | 'family'
   | 'invite'
   | 'rules'
-  | 'report';
+  | 'report'
+  | 'checklist';
 
 type Toast = { id: string; text: string };
 
@@ -67,6 +70,11 @@ type AppState = {
 
   toasts: Toast[];
   toast: (text: string) => void;
+
+  checklist: ChecklistItem[];
+  addChecklistItem: (item: Omit<ChecklistItem, 'id' | 'completed' | 'createdBy'>) => void;
+  toggleChecklistItem: (id: string) => void;
+  removeChecklistItem: (id: string) => void;
 };
 
 const Ctx = createContext<AppState | null>(null);
@@ -91,6 +99,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [lastEndedSession, setLastEnded] = useState<CareSession | null>(null);
   const [invite, setInvite] = useState<{ token: string; url: string } | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const [checklist, setChecklist] = useState<ChecklistItem[]>(() => makeMockChecklist('user_parent_1'));
 
   const navigate = useCallback((s: Screen, p?: unknown) => {
     setPayload(p ?? null);
@@ -119,6 +128,38 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const id = Math.random().toString(36).slice(2);
     setToasts((t) => [...t, { id, text }]);
     setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 2400);
+  }, []);
+
+  // Polling: 체크리스트 시간이 되면 토스트로 푸시 알림
+  const toastRef = useRef(toast);
+  toastRef.current = toast;
+  useEffect(() => {
+    const tick = () => {
+      const now = new Date();
+      setChecklist((arr) => {
+        let changed = false;
+        const next = arr.map((it) => {
+          if (it.completed) return it;
+          const due = itemDateTime(it);
+          const diffMin = (now.getTime() - due.getTime()) / 60000;
+          if (diffMin >= 0 && !it.notifiedDue) {
+            toastRef.current(`🔔 체크리스트 시간이에요 — ${it.label}`);
+            changed = true;
+            return { ...it, notifiedDue: true };
+          }
+          if (diffMin >= 30 && !it.notifiedFollowup) {
+            toastRef.current(`⏰ 아직 완료하지 않으셨어요 — ${it.label}`);
+            changed = true;
+            return { ...it, notifiedFollowup: true };
+          }
+          return it;
+        });
+        return changed ? next : arr;
+      });
+    };
+    tick();
+    const id = setInterval(tick, 30_000);
+    return () => clearInterval(id);
   }, []);
 
   const value: AppState = {
@@ -160,6 +201,33 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setInvite,
     toasts,
     toast,
+    checklist,
+    addChecklistItem: (item) =>
+      setChecklist((arr) =>
+        [
+          ...arr,
+          {
+            ...item,
+            id: `cl_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`,
+            completed: false,
+            createdBy: currentUser.id,
+          },
+        ].sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time)),
+      ),
+    toggleChecklistItem: (id) =>
+      setChecklist((arr) =>
+        arr.map((it) =>
+          it.id === id
+            ? {
+                ...it,
+                completed: !it.completed,
+                completedAt: !it.completed ? new Date().toISOString() : undefined,
+                completedBy: !it.completed ? currentUser.name : undefined,
+              }
+            : it,
+        ),
+      ),
+    removeChecklistItem: (id) => setChecklist((arr) => arr.filter((it) => it.id !== id)),
   };
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

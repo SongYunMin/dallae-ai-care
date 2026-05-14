@@ -12,6 +12,7 @@ import { FamilyScreen } from "@/screens/FamilyScreen";
 import { InviteScreen } from "@/screens/InviteScreen";
 import { RulesScreen } from "@/screens/RulesScreen";
 import { ReportScreen } from "@/screens/ReportScreen";
+import { ChecklistScreen } from "@/screens/ChecklistScreen";
 
 export const Route = createFileRoute("/")({
   component: Index,
@@ -40,6 +41,7 @@ function Inner() {
       {screen === "invite" && <InviteScreen />}
       {screen === "rules" && <RulesScreen />}
       {screen === "report" && <ReportScreen />}
+      {screen === "checklist" && <ChecklistScreen />}
     </MobileShell>
   );
 }

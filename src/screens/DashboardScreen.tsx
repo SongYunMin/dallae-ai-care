@@ -14,8 +14,10 @@ import {
   ShieldCheck,
   TrendingUp,
   Calendar,
+  CheckSquare,
 } from 'lucide-react';
 import { formatRelative } from '@/lib/date';
+import { formatItemTime, itemDateTime, todayKey, KIND_META } from '@/lib/checklist';
 import type { AgentNotification } from '@/lib/types';
 
 const NOTI_META: Record<
@@ -41,7 +43,15 @@ export function DashboardScreen() {
     setNotificationStatus,
     setPendingChatQuestion,
     parentRules,
+    checklist,
   } = useApp();
+
+  const today = todayKey();
+  const todayItems = checklist.filter((c) => c.date === today);
+  const now = Date.now();
+  const nextItem = todayItems.find((c) => !c.completed && itemDateTime(c).getTime() >= now)
+    ?? todayItems.find((c) => !c.completed);
+  const doneCount = todayItems.filter((c) => c.completed).length;
 
   const lastFeeding = records.find((r) => r.type === 'FEEDING');
   const lastSleep = records.find((r) => r.type === 'SLEEP_END' || r.type === 'SLEEP_START');
@@ -144,6 +154,38 @@ export function DashboardScreen() {
             <ChevronRight size={18} className="text-muted-foreground shrink-0" />
           </button>
         )}
+
+        {/* === Today's checklist === */}
+        <button
+          onClick={() => navigate('checklist')}
+          className="w-full rounded-3xl bg-card shadow-card p-4 text-left active:scale-[0.99] transition-transform"
+        >
+          <div className="flex items-center gap-2 mb-2">
+            <div className="rounded-xl bg-mint/50 p-2">
+              <CheckSquare size={18} className="text-mint-foreground" />
+            </div>
+            <div className="flex-1">
+              <p className="font-bold text-sm">오늘의 돌봄 체크리스트</p>
+              <p className="text-[11px] text-muted-foreground">
+                {todayItems.length === 0
+                  ? '아직 등록된 항목이 없어요'
+                  : `${doneCount}/${todayItems.length} 완료 · 시간되면 알림`}
+              </p>
+            </div>
+            <ChevronRight size={18} className="text-muted-foreground" />
+          </div>
+          {nextItem && (
+            <div className="rounded-2xl bg-cream/70 px-3 py-2 flex items-center gap-2">
+              <span className="text-base">{KIND_META[nextItem.kind].emoji}</span>
+              <div className="flex-1 min-w-0">
+                <p className="text-[11px] font-semibold text-foreground/70">
+                  다음 일정 · {formatItemTime(nextItem.time)}
+                </p>
+                <p className="text-sm font-bold truncate">{nextItem.label}</p>
+              </div>
+            </div>
+          )}
+        </button>
 
         {/* === Care mode CTA === */}
         <button
