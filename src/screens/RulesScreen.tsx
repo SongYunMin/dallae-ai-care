@@ -19,20 +19,28 @@ export function RulesScreen() {
           <div className="flex items-center gap-2 mb-2">
             <ShieldCheck size={16} className="text-mint-foreground" />
             <p className="text-sm font-bold text-mint-foreground">기본 안전 규칙</p>
+            <span className="ml-auto inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-mint-foreground/10 text-mint-foreground">
+              ✨ AI 자동 생성
+            </span>
           </div>
-          <p className="text-[11px] text-muted-foreground mb-2">자동으로 적용되며 삭제할 수 없어요.</p>
+          <p className="text-[11px] text-muted-foreground mb-2">달래 AI가 안전을 위해 자동으로 적용했어요. 삭제할 수 없어요.</p>
           <ul className="space-y-1.5">
             {DEFAULT_RULES.map((r) => (
-              <li key={r} className="text-sm flex gap-2"><span>•</span><span>{r}</span></li>
+              <li key={r} className="text-sm flex gap-2"><span>✨</span><span>{r}</span></li>
             ))}
           </ul>
         </div>
 
         <div className="rounded-3xl bg-card shadow-card p-4">
-          <p className="text-sm font-bold mb-2">우리 집 규칙</p>
+          <div className="flex items-center gap-2 mb-2">
+            <p className="text-sm font-bold">우리 집 규칙</p>
+            <span className="ml-auto inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-primary/10 text-primary">
+              👩‍👧 부모가 직접 추가
+            </span>
+          </div>
           <ul className="space-y-1.5 mb-3">
             {parentRules.map((r) => (
-              <li key={r} className="text-sm flex gap-2"><span className="text-primary">●</span><span>{r}</span></li>
+              <li key={r} className="text-sm flex gap-2"><span>💛</span><span>{r}</span></li>
             ))}
           </ul>
           <div className="flex gap-2">
