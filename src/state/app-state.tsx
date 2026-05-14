@@ -34,6 +34,8 @@ type Toast = { id: string; text: string };
 type AppState = {
   screen: Screen;
   navigate: (s: Screen, payload?: unknown) => void;
+  goBack: () => void;
+  canGoBack: boolean;
   payload: unknown;
 
   child: typeof MOCK_CHILD;
@@ -71,6 +73,7 @@ const Ctx = createContext<AppState | null>(null);
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [screen, setScreen] = useState<Screen>('splash');
+  const [history, setHistory] = useState<Screen[]>([]);
   const [payload, setPayload] = useState<unknown>(null);
   const [child] = useState(MOCK_CHILD);
   const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>(MOCK_FAMILY_MEMBERS);
@@ -91,8 +94,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const navigate = useCallback((s: Screen, p?: unknown) => {
     setPayload(p ?? null);
-    setScreen(s);
+    setScreen((prev) => {
+      if (prev !== s && prev !== 'splash' && prev !== 'onboarding') {
+        setHistory((h) => [...h, prev]);
+      }
+      return s;
+    });
     if (typeof window !== 'undefined') window.scrollTo(0, 0);
+  }, []);
+
+  const goBack = useCallback(() => {
+    setHistory((h) => {
+      if (h.length === 0) return h;
+      const next = h.slice(0, -1);
+      const target = h[h.length - 1];
+      setPayload(null);
+      setScreen(target);
+      if (typeof window !== 'undefined') window.scrollTo(0, 0);
+      return next;
+    });
   }, []);
 
   const toast = useCallback((text: string) => {
@@ -105,6 +125,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     screen,
     payload,
     navigate,
+    goBack,
+    canGoBack: history.length > 0,
     child,
     familyMembers,
     currentUser,

@@ -3,7 +3,7 @@ import { useApp } from '@/state/app-state';
 import { createCareRecord } from '@/lib/api';
 import type { CareRecord, CareRecordType } from '@/lib/types';
 import { formatRelative, formatTime } from '@/lib/date';
-import { Plus, Milk, Moon, Baby, Pill, MessageSquareWarning, StickyNote, ChevronLeft } from 'lucide-react';
+import { Plus, Milk, Moon, Baby, Pill, MessageSquareWarning, StickyNote } from 'lucide-react';
 
 const recordMeta: Record<CareRecordType, { label: string; icon: typeof Milk; tone: string }> = {
   FEEDING: { label: '수유', icon: Milk, tone: 'bg-cream text-foreground' },
@@ -129,10 +129,7 @@ export function RecordNewScreen() {
 
   return (
     <div className="flex flex-col">
-      <header className="px-4 pt-6 pb-2 flex items-center gap-2">
-        <button onClick={() => navigate('records')} className="p-2 -ml-2 text-muted-foreground">
-          <ChevronLeft size={24} />
-        </button>
+      <header className="px-4 pt-6 pb-2 flex items-center gap-2 pl-16">
         <h1 className="text-lg font-bold">새 기록</h1>
       </header>
       <div className="px-5 space-y-4 pb-32">
