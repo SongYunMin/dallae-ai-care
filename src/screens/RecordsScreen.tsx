@@ -3,7 +3,7 @@ import { useApp } from '@/state/app-state';
 import { createCareRecord } from '@/lib/api';
 import type { CareRecord, CareRecordType } from '@/lib/types';
 import { formatRelative, formatTime } from '@/lib/date';
-import { Plus, Milk, Moon, Baby, Pill, MessageSquareWarning, StickyNote, ChevronLeft } from 'lucide-react';
+import { Plus, Milk, Moon, Baby, Pill, MessageSquareWarning, StickyNote } from 'lucide-react';
 
 const recordMeta: Record<CareRecordType, { label: string; icon: typeof Milk; tone: string }> = {
   FEEDING: { label: '수유', icon: Milk, tone: 'bg-cream text-foreground' },
