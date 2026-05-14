@@ -6,7 +6,7 @@ import { createCareRecord, endCareSession, parseTextToRecord, startCareSession }
 import { formatDuration, formatTime } from "@/lib/date";
 import { itemDateTime, todayKey, formatItemTime } from "@/lib/checklist";
 import type { CareRecord, CareRecordType, ChecklistItem } from "@/lib/types";
-import { Mic, Send } from "lucide-react";
+import { Mic, Send, X } from "lucide-react";
 
 const quick: { type: CareRecordType; label: string }[] = [
   { type: "FEEDING", label: "분유 먹였어요" },
@@ -14,7 +14,21 @@ const quick: { type: CareRecordType; label: string }[] = [
   { type: "SLEEP_START", label: "낮잠 시작" },
   { type: "SLEEP_END", label: "낮잠 종료" },
   { type: "MEDICINE", label: "약 먹였어요" },
-  { type: "CRYING", label: "울었어요" },
+];
+
+const MOOD_OPTIONS: { emoji: string; label: string }[] = [
+  { emoji: "😄", label: "기쁨" },
+  { emoji: "😊", label: "행복" },
+  { emoji: "😮", label: "놀람" },
+  { emoji: "😢", label: "슬픔" },
+  { emoji: "😭", label: "울음" },
+  { emoji: "😠", label: "화남" },
+  { emoji: "😴", label: "졸림" },
+  { emoji: "🤒", label: "아픔" },
+  { emoji: "🍔", label: "배고픔" },
+  { emoji: "❤️", label: "사랑" },
+  { emoji: "❓", label: "궁금" },
+  { emoji: "😌", label: "편안" },
 ];
 
 export function CareModeScreen() {
