@@ -208,7 +208,7 @@ export function CareModeScreen() {
                   <button
                     key={m.label}
                     onClick={async () => {
-                      setChildMood({ emoji: m.emoji, label: m.label });
+                      setChildMood({ emoji: m.emoji, label: m.label, image: m.image });
                       const r = await createCareRecord({
                         type: "NOTE",
                         recordedBy: currentUser.name,
@@ -219,9 +219,14 @@ export function CareModeScreen() {
                       setMoodOpen(false);
                       toast(`${m.emoji} ${m.label} · 감정 기록`);
                     }}
-                    className="aspect-square rounded-2xl bg-cream flex flex-col items-center justify-center gap-0.5 active:scale-95 transition-transform"
+                    className="aspect-square rounded-2xl bg-cream flex flex-col items-center justify-center gap-1 p-1 active:scale-95 transition-transform"
                   >
-                    <span className="text-2xl leading-none">{m.emoji}</span>
+                    <img
+                      src={m.image}
+                      alt={m.label}
+                      className="h-12 w-12 object-contain"
+                      draggable={false}
+                    />
                     <span className="text-[10px] font-semibold">{m.label}</span>
                   </button>
                 ))}
