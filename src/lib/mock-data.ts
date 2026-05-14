@@ -7,10 +7,14 @@ export const MOCK_FAMILY = {
 
 export const MOCK_CHILD: Child = {
   id: 'child_1',
+  familyId: 'family_1',
   name: '하린',
   ageInMonths: 6,
   birthDate: '2025-11-07',
   feedingType: 'FORMULA',
+  allergies: '없음',
+  medicalNotes: '해열제는 부모 확인 후 복용',
+  careNotes: '영상보다 장난감으로 달래기',
 };
 
 export const DEFAULT_RULES = [
@@ -31,10 +35,51 @@ export const MOCK_FAMILY_MEMBERS: FamilyMember[] = [
 ];
 
 export const MOCK_RECORDS: CareRecord[] = [
-  { id: 'r1', type: 'FEEDING', at: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(), amountMl: 160, memo: '분유 잘 먹음', recordedBy: '엄마', source: 'MANUAL' },
-  { id: 'r2', type: 'SLEEP_END', at: new Date(Date.now() - 1000 * 60 * 60 * 4).toISOString(), memo: '낮잠 종료', recordedBy: '엄마', source: 'MANUAL' },
-  { id: 'r3', type: 'DIAPER', at: new Date(Date.now() - 1000 * 60 * 60 * 5).toISOString(), memo: '정상', recordedBy: '엄마', source: 'MANUAL' },
-  { id: 'r4', type: 'SLEEP_START', at: new Date(Date.now() - 1000 * 60 * 60 * 6).toISOString(), memo: '낮잠 시작', recordedBy: '엄마', source: 'MANUAL' },
+  {
+    id: 'r1',
+    familyId: 'family_1',
+    childId: 'child_1',
+    type: 'FEEDING',
+    recordedAt: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(),
+    amountMl: 160,
+    memo: '분유 잘 먹음',
+    recordedBy: 'user_parent_1',
+    recordedByName: '엄마',
+    source: 'MANUAL',
+  },
+  {
+    id: 'r2',
+    familyId: 'family_1',
+    childId: 'child_1',
+    type: 'SLEEP_END',
+    recordedAt: new Date(Date.now() - 1000 * 60 * 60 * 4).toISOString(),
+    memo: '낮잠 종료',
+    recordedBy: 'user_parent_1',
+    recordedByName: '엄마',
+    source: 'MANUAL',
+  },
+  {
+    id: 'r3',
+    familyId: 'family_1',
+    childId: 'child_1',
+    type: 'DIAPER',
+    recordedAt: new Date(Date.now() - 1000 * 60 * 60 * 5).toISOString(),
+    memo: '정상',
+    recordedBy: 'user_parent_1',
+    recordedByName: '엄마',
+    source: 'MANUAL',
+  },
+  {
+    id: 'r4',
+    familyId: 'family_1',
+    childId: 'child_1',
+    type: 'SLEEP_START',
+    recordedAt: new Date(Date.now() - 1000 * 60 * 60 * 6).toISOString(),
+    memo: '낮잠 시작',
+    recordedBy: 'user_parent_1',
+    recordedByName: '엄마',
+    source: 'MANUAL',
+  },
 ];
 
 export const MOCK_NOTIFICATIONS: AgentNotification[] = [

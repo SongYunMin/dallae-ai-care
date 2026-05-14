@@ -16,6 +16,17 @@ import moodSick from "@/assets/moods/sick.png";
 import moodSleepy from "@/assets/moods/sleepy.png";
 import moodCurious from "@/assets/moods/curious.png";
 
+type SpeechRecognitionCtor = new () => {
+  lang: string;
+  interimResults: boolean;
+  maxAlternatives: number;
+  start: () => void;
+  stop: () => void;
+  onresult: ((event: { results: ArrayLike<{ 0: { transcript: string } }> }) => void) | null;
+  onerror: (() => void) | null;
+  onend: (() => void) | null;
+};
+
 const quick: { type: CareRecordType; label: string }[] = [
   { type: "FEEDING", label: "분유 먹였어요" },
   { type: "DIAPER", label: "기저귀 갈았어요" },
@@ -52,6 +63,7 @@ export function CareModeScreen() {
     setChildMood,
   } = useApp();
   const [text, setText] = useState("");
+  const [listening, setListening] = useState(false);
   const [tick, setTick] = useState(0);
   const [moodOpen, setMoodOpen] = useState(false);
 
@@ -96,11 +108,14 @@ export function CareModeScreen() {
 
         <button
           onClick={async () => {
-            const s = await startCareSession(currentUser.name);
+            const s = await startCareSession(currentUser.name, currentUser.id);
             startSession({
               id: s.careSessionId,
+              familyId: "family_1",
+              childId: child.id,
               caregiverId: currentUser.id,
               caregiverName: currentUser.name,
+              relationship: "caregiver",
               startedAt: s.startedAt,
               status: "ACTIVE",
             });
@@ -117,9 +132,11 @@ export function CareModeScreen() {
   const onQuick = async (type: CareRecordType, label: string) => {
     const r = await createCareRecord({
       type,
-      recordedBy: currentUser.name,
+      recordedBy: currentUser.id,
+      recordedByName: currentUser.name,
       source: "MANUAL",
       memo: label,
+      careSessionId: session.id,
     });
     addRecord(r);
     toast(`${label} · 기록했어요`);
@@ -132,12 +149,44 @@ export function CareModeScreen() {
       type: parsed.type,
       amountMl: parsed.amountMl,
       memo: text,
-      recordedBy: currentUser.name,
+      recordedBy: currentUser.id,
+      recordedByName: currentUser.name,
       source: "VOICE",
+      careSessionId: session.id,
     });
     addRecord(r);
     toast("음성 기록을 저장했어요");
     setText("");
+  };
+
+  const onVoiceRecord = () => {
+    const SpeechRecognition =
+      (window as unknown as { SpeechRecognition?: SpeechRecognitionCtor; webkitSpeechRecognition?: SpeechRecognitionCtor })
+        .SpeechRecognition ??
+      (window as unknown as { SpeechRecognition?: SpeechRecognitionCtor; webkitSpeechRecognition?: SpeechRecognitionCtor })
+        .webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+      toast("이 브라우저는 음성 인식을 지원하지 않아요. 아래 칸에 말한 내용을 적어주세요.");
+      return;
+    }
+
+    // 조부모 사용자가 긴 입력 없이 한 문장으로 기록할 수 있게 음성을 텍스트로 옮긴다.
+    const recognition = new SpeechRecognition();
+    recognition.lang = "ko-KR";
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+    recognition.onresult = (event) => {
+      const transcript = event.results[0]?.[0]?.transcript?.trim();
+      if (transcript) setText(transcript);
+    };
+    recognition.onerror = () => {
+      toast("음성을 듣지 못했어요. 텍스트로 입력해 주세요.");
+      setListening(false);
+    };
+    recognition.onend = () => setListening(false);
+    setListening(true);
+    recognition.start();
   };
 
   return (
@@ -242,8 +291,11 @@ export function CareModeScreen() {
           </div>
           <div className="flex items-center gap-2">
             <button
-              onClick={() => toast("음성 인식은 데모에서 텍스트로 입력해요")}
-              className="h-12 w-12 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-soft shrink-0"
+              onClick={onVoiceRecord}
+              className={`h-12 w-12 rounded-full text-primary-foreground flex items-center justify-center shadow-soft shrink-0 ${
+                listening ? "bg-coral animate-pulse" : "bg-primary"
+              }`}
+              aria-label="말로 기록하기"
             >
               <Mic size={20} />
             </button>
@@ -273,7 +325,7 @@ export function CareModeScreen() {
               const ended = endSession();
               if (!ended) return;
               const sessionRecords = records.filter(
-                (r) => new Date(r.at).getTime() >= new Date(ended.startedAt).getTime(),
+                (r) => new Date(r.recordedAt).getTime() >= new Date(ended.startedAt).getTime(),
               );
               const counts = {
                 feeding: sessionRecords.filter((r) => r.type === "FEEDING").length,
@@ -335,7 +387,7 @@ export function CareModeScreen() {
                 },
                 sentAt: new Date().toISOString(),
               });
-              navigate("thankYouReport");
+              navigate("thankYouReport", { careSessionId: ended.id });
             }}
             className="w-full h-14 rounded-2xl bg-coral text-coral-foreground font-semibold shadow-soft"
           >

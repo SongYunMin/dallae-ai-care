@@ -28,7 +28,12 @@ export function RecordsScreen() {
   const { records, addRecord, currentUser, toast, navigate } = useApp();
 
   const handleQuick = async (type: CareRecordType) => {
-    const r = await createCareRecord({ type, recordedBy: currentUser.name, source: 'MANUAL' });
+    const r = await createCareRecord({
+      type,
+      recordedBy: currentUser.id,
+      recordedByName: currentUser.name,
+      source: 'MANUAL',
+    });
     addRecord(r);
     toast('기록했어요. 다음 돌봄자가 이어받기 쉬워요.');
   };
@@ -97,11 +102,11 @@ function TimelineItem({ r }: { r: CareRecord }) {
             {m.label}
             {r.amountMl ? ` · ${r.amountMl}ml` : ''}
           </p>
-          <p className="text-[11px] text-muted-foreground">{formatTime(r.at)}</p>
+          <p className="text-[11px] text-muted-foreground">{formatTime(r.recordedAt)}</p>
         </div>
         {r.memo && <p className="text-xs text-foreground/75 mt-1 leading-snug">{r.memo}</p>}
         <p className="text-[11px] text-muted-foreground mt-1">
-          {r.recordedBy} · {formatRelative(r.at)} · {r.source === 'VOICE' ? '음성' : r.source === 'CHATBOT' ? '챗봇' : '수동'}
+          {r.recordedByName} · {formatRelative(r.recordedAt)} · {r.source === 'VOICE' ? '음성' : r.source === 'CHATBOT' ? '챗봇' : '수동'}
         </p>
       </div>
     </li>
@@ -119,7 +124,8 @@ export function RecordNewScreen() {
       type,
       amountMl: amount ? Number(amount) : undefined,
       memo,
-      recordedBy: currentUser.name,
+      recordedBy: currentUser.id,
+      recordedByName: currentUser.name,
       source: 'MANUAL',
     });
     addRecord(r);

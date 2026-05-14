@@ -18,11 +18,14 @@ export function InviteScreen() {
   const onAccept = async () => {
     const u = await acceptInvite(token, { name, emailOrPin: pin });
     setCurrentUser({ id: u.userId, name: u.name, role: u.role });
-    const s = await startCareSession(u.name);
+    const s = await startCareSession(u.name, u.userId);
     startSession({
       id: s.careSessionId,
+      familyId: u.familyId,
+      childId: u.childId,
       caregiverId: u.userId,
       caregiverName: u.name,
+      relationship: invite?.relationship ?? '돌봄자',
       startedAt: s.startedAt,
       status: 'ACTIVE',
     });

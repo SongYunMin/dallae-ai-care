@@ -1,0 +1,7 @@
+fastapi
+uvicorn[standard]
+pydantic
+python-dotenv
+google-adk>=1.28.1
+aiosqlite
+pytest

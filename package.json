@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite dev",
+    "dev:web": "vite dev",
+    "dev:api": "cd apps/api && uvicorn main:app --reload --port 8000",
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "preview": "vite preview",

@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useCallback, useEffect, useRef, type ReactNode } from 'react';
+import { useNavigate, useRouterState } from '@tanstack/react-router';
 import type {
   AgentNotification,
   CareRecord,
@@ -17,6 +18,7 @@ import {
   PARENT_RULES,
 } from '@/lib/mock-data';
 import { itemDateTime, makeMockChecklist } from '@/lib/checklist';
+import { evaluateAgentNotifications, updateAgentNotificationStatus } from '@/lib/api';
 
 export type Screen =
   | 'splash'
@@ -35,6 +37,52 @@ export type Screen =
   | 'checklist';
 
 type Toast = { id: string; text: string };
+
+const SCREEN_PATHS: Partial<Record<Screen, string>> = {
+  splash: '/',
+  onboarding: '/onboarding/parent',
+  dashboard: '/dashboard',
+  records: '/records',
+  recordNew: '/records/new',
+  careMode: '/care-mode',
+  chat: '/chat',
+  notifications: '/notifications',
+  family: '/family',
+  rules: '/rules',
+  checklist: '/checklist',
+  thankYouReport: '/reports/latest/thank-you',
+};
+
+function screenFromPath(pathname: string): { screen: Screen; payload: unknown } {
+  if (pathname === '/') return { screen: 'splash', payload: null };
+  if (pathname === '/onboarding/parent') return { screen: 'onboarding', payload: null };
+  if (pathname === '/dashboard') return { screen: 'dashboard', payload: null };
+  if (pathname === '/records/new') return { screen: 'recordNew', payload: null };
+  if (pathname === '/records') return { screen: 'records', payload: null };
+  if (pathname === '/care-mode') return { screen: 'careMode', payload: null };
+  if (pathname === '/chat') return { screen: 'chat', payload: null };
+  if (pathname === '/notifications') return { screen: 'notifications', payload: null };
+  if (pathname === '/family') return { screen: 'family', payload: null };
+  if (pathname === '/rules') return { screen: 'rules', payload: null };
+  if (pathname === '/checklist') return { screen: 'checklist', payload: null };
+  const invite = pathname.match(/^\/invite\/([^/]+)$/);
+  if (invite) return { screen: 'invite', payload: { token: decodeURIComponent(invite[1]) } };
+  const thankYou = pathname.match(/^\/reports\/([^/]+)\/thank-you$/);
+  if (thankYou) return { screen: 'thankYouReport', payload: { careSessionId: decodeURIComponent(thankYou[1]) } };
+  const report = pathname.match(/^\/reports\/([^/]+)$/);
+  if (report) return { screen: 'report', payload: { careSessionId: decodeURIComponent(report[1]) } };
+  return { screen: 'dashboard', payload: null };
+}
+
+function pathForScreen(screen: Screen, payload?: unknown): string {
+  const p = payload as { token?: string; careSessionId?: string } | undefined;
+  if (screen === 'invite') return `/invite/${encodeURIComponent(p?.token ?? 'invite_demo123')}`;
+  if (screen === 'report') return `/reports/${encodeURIComponent(p?.careSessionId ?? 'latest')}`;
+  if (screen === 'thankYouReport') {
+    return `/reports/${encodeURIComponent(p?.careSessionId ?? 'latest')}/thank-you`;
+  }
+  return SCREEN_PATHS[screen] ?? '/dashboard';
+}
 
 type AppState = {
   screen: Screen;
@@ -92,6 +140,8 @@ type AppState = {
 const Ctx = createContext<AppState | null>(null);
 
 export function AppProvider({ children }: { children: ReactNode }) {
+  const routeNavigate = useNavigate();
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
   const [screen, setScreen] = useState<Screen>('splash');
   const [history, setHistory] = useState<Screen[]>([]);
   const [payload, setPayload] = useState<unknown>(null);
@@ -116,6 +166,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [parentThankYouMessage, setParentThankYouMessage] = useState<string>('');
   const [childMood, setChildMoodState] = useState<{ emoji: string; label: string; image?: string; at: string } | null>(null);
 
+  useEffect(() => {
+    const next = screenFromPath(pathname);
+    setScreen(next.screen);
+    setPayload(next.payload);
+  }, [pathname]);
+
   const navigate = useCallback((s: Screen, p?: unknown) => {
     setPayload(p ?? null);
     setScreen((prev) => {
@@ -124,8 +180,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
       return s;
     });
+    routeNavigate({ to: pathForScreen(s, p) });
     if (typeof window !== 'undefined') window.scrollTo(0, 0);
-  }, []);
+  }, [routeNavigate]);
 
   const goBack = useCallback(() => {
     setHistory((h) => {
@@ -134,16 +191,34 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const target = h[h.length - 1];
       setPayload(null);
       setScreen(target);
+      routeNavigate({ to: pathForScreen(target) });
       if (typeof window !== 'undefined') window.scrollTo(0, 0);
       return next;
     });
-  }, []);
+  }, [routeNavigate]);
 
   const toast = useCallback((text: string) => {
     const id = Math.random().toString(36).slice(2);
     setToasts((t) => [...t, { id, text }]);
     setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 2400);
   }, []);
+
+  const mergeNotifications = useCallback((incoming: AgentNotification[]) => {
+    if (incoming.length === 0) return;
+    setNotifications((arr) => {
+      const seen = new Set(arr.map((n) => n.id));
+      const fresh = incoming.filter((n) => !seen.has(n.id));
+      return fresh.length === 0 ? arr : [...fresh, ...arr];
+    });
+  }, []);
+
+  const refreshAgentNotifications = useCallback(() => {
+    void evaluateAgentNotifications().then((res) => mergeNotifications(res.notifications));
+  }, [mergeNotifications]);
+
+  useEffect(() => {
+    refreshAgentNotifications();
+  }, [refreshAgentNotifications]);
 
   // Polling: 체크리스트 시간이 되면 토스트로 푸시 알림
   const toastRef = useRef(toast);
@@ -207,12 +282,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
       toast('로그아웃했어요');
     },
     records,
-    addRecord: (r) => setRecords((arr) => [r, ...arr]),
+    addRecord: (r) => {
+      setRecords((arr) => [r, ...arr]);
+      // 기록이 바뀌면 백엔드가 최신 맥락으로 AI 알림 후보를 다시 판단한다.
+      refreshAgentNotifications();
+    },
     parentRules,
     addRule: (r) => setParentRules((arr) => [...arr, r]),
     notifications,
-    setNotificationStatus: (id, status) =>
-      setNotifications((arr) => arr.map((n) => (n.id === id ? { ...n, status } : n))),
+    setNotificationStatus: (id, status) => {
+      setNotifications((arr) => arr.map((n) => (n.id === id ? { ...n, status } : n)));
+      void updateAgentNotificationStatus(id, status);
+    },
     chatMessages,
     addChatMessage: (m) => setChatMessages((arr) => [...arr, m]),
     pendingChatQuestion,

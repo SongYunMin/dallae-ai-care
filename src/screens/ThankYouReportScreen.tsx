@@ -21,9 +21,9 @@ export function ThankYouReportScreen() {
 
   const sessionRecords = session
     ? records
-        .filter((r) => new Date(r.at).getTime() >= new Date(session.startedAt).getTime())
-        .filter((r) => !session.endedAt || new Date(r.at).getTime() <= new Date(session.endedAt).getTime())
-        .sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime())
+        .filter((r) => new Date(r.recordedAt).getTime() >= new Date(session.startedAt).getTime())
+        .filter((r) => !session.endedAt || new Date(r.recordedAt).getTime() <= new Date(session.endedAt).getTime())
+        .sort((a, b) => new Date(a.recordedAt).getTime() - new Date(b.recordedAt).getTime())
     : [];
 
   const aiGenerated = report?.fromUserName.includes('AI');
@@ -103,7 +103,7 @@ export function ThankYouReportScreen() {
                   className="flex items-start gap-2 rounded-xl bg-cream/70 px-3 py-2"
                 >
                   <span className="text-[10px] font-bold tracking-wider text-mint-foreground bg-mint/40 px-2 py-0.5 rounded-full mt-0.5 shrink-0">
-                    {formatTime(r.at)}
+                    {formatTime(r.recordedAt)}
                   </span>
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-semibold">

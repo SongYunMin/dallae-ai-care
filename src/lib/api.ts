@@ -1,14 +1,61 @@
-// Mock API layer mimicking FastAPI contracts.
-// Replace with fetch calls later.
 import type {
   AgentCareResponse,
+  AgentNotification,
   CareRecord,
   CareRecordType,
   Invite,
   RecordSource,
+  UserRole,
 } from './types';
 
+const FALLBACK_FAMILY_ID = 'family_1';
+const FALLBACK_CHILD_ID = 'child_1';
+const FALLBACK_PARENT_ID = 'user_parent_1';
+const API_BASE =
+  (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, '') ||
+  'http://localhost:8000';
+
 const delay = (ms = 200) => new Promise((r) => setTimeout(r, ms));
+
+async function requestJson<T>(path: string, init?: RequestInit): Promise<T | null> {
+  try {
+    const res = await fetch(`${API_BASE}${path}`, {
+      ...init,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(init?.headers ?? {}),
+      },
+    });
+    if (!res.ok) return null;
+    return (await res.json()) as T;
+  } catch {
+    return null;
+  }
+}
+
+function createLocalRecord(input: {
+  type: CareRecordType;
+  amountMl?: number;
+  memo?: string;
+  recordedBy: string;
+  recordedByName?: string;
+  source: RecordSource;
+  careSessionId?: string;
+}): CareRecord {
+  return {
+    id: 'rec_' + Math.random().toString(36).slice(2, 8),
+    familyId: FALLBACK_FAMILY_ID,
+    childId: FALLBACK_CHILD_ID,
+    careSessionId: input.careSessionId,
+    type: input.type,
+    recordedAt: new Date().toISOString(),
+    amountMl: input.amountMl,
+    memo: input.memo,
+    recordedBy: input.recordedBy,
+    recordedByName: input.recordedByName ?? input.recordedBy,
+    source: input.source,
+  };
+}
 
 export async function createParentOnboarding(input: {
   parentName: string;
@@ -19,11 +66,22 @@ export async function createParentOnboarding(input: {
   medicalNotes?: string;
   careNotes?: string;
 }) {
+  const res = await requestJson<{
+    familyId: string;
+    childId: string;
+    userId: string;
+    role: 'PARENT_ADMIN';
+  }>('/api/onboarding/parent', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+  if (res) return { ...res, input };
+
   await delay();
   return {
-    familyId: 'family_1',
-    childId: 'child_1',
-    userId: 'user_parent_1',
+    familyId: FALLBACK_FAMILY_ID,
+    childId: FALLBACK_CHILD_ID,
+    userId: FALLBACK_PARENT_ID,
     role: 'PARENT_ADMIN' as const,
     input,
   };
@@ -31,9 +89,18 @@ export async function createParentOnboarding(input: {
 
 export async function createInvite(input: {
   relationship: string;
-  role: string;
+  role: UserRole;
   memo?: string;
 }): Promise<{ token: string; inviteUrl: string }> {
+  const res = await requestJson<{ token: string; inviteUrl: string }>(
+    `/api/families/${FALLBACK_FAMILY_ID}/invites`,
+    {
+      method: 'POST',
+      body: JSON.stringify(input),
+    },
+  );
+  if (res) return res;
+
   await delay();
   const token = 'invite_' + Math.random().toString(36).slice(2, 8);
   return {
@@ -43,10 +110,13 @@ export async function createInvite(input: {
 }
 
 export async function getInvite(token: string): Promise<Invite> {
+  const res = await requestJson<Invite>(`/api/invites/${encodeURIComponent(token)}`);
+  if (res) return res;
+
   await delay();
   return {
     token,
-    familyId: 'family_1',
+    familyId: FALLBACK_FAMILY_ID,
     childName: '하린',
     relationship: '할머니',
     role: 'CAREGIVER_EDITOR',
@@ -55,20 +125,39 @@ export async function getInvite(token: string): Promise<Invite> {
 }
 
 export async function acceptInvite(_token: string, input: { name: string; emailOrPin: string }) {
+  const res = await requestJson<{
+    userId: string;
+    familyId: string;
+    childId: string;
+    role: 'CAREGIVER_EDITOR' | 'CAREGIVER_VIEWER';
+    name: string;
+  }>(`/api/invites/${encodeURIComponent(_token)}/accept`, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+  if (res) return res;
+
   await delay();
   return {
     userId: 'user_grandma_1',
-    familyId: 'family_1',
-    childId: 'child_1',
+    familyId: FALLBACK_FAMILY_ID,
+    childId: FALLBACK_CHILD_ID,
     role: 'CAREGIVER_EDITOR' as const,
     name: input.name,
   };
 }
 
 export async function getChildStatus() {
+  const res = await requestJson<{
+    child: { id: string; name: string; ageInMonths: number };
+    latestStatus: Record<string, string>;
+    activeRules?: string[];
+  }>(`/api/children/${FALLBACK_CHILD_ID}/status`);
+  if (res) return res;
+
   await delay();
   return {
-    child: { id: 'child_1', name: '하린', ageInMonths: 6 },
+    child: { id: FALLBACK_CHILD_ID, name: '하린', ageInMonths: 6 },
     latestStatus: {
       feeding: '오후 2:20 / 160ml',
       sleep: '오후 12:00 종료',
@@ -83,21 +172,48 @@ export async function createCareRecord(input: {
   amountMl?: number;
   memo?: string;
   recordedBy: string;
+  recordedByName?: string;
   source: RecordSource;
+  careSessionId?: string;
 }): Promise<CareRecord> {
-  await delay(120);
-  return {
-    id: 'rec_' + Math.random().toString(36).slice(2, 8),
+  const payload = {
+    familyId: FALLBACK_FAMILY_ID,
+    childId: FALLBACK_CHILD_ID,
+    careSessionId: input.careSessionId,
     type: input.type,
-    at: new Date().toISOString(),
     amountMl: input.amountMl,
-    memo: input.memo,
     recordedBy: input.recordedBy,
+    recordedByName: input.recordedByName ?? input.recordedBy,
     source: input.source,
+    memo: input.memo,
   };
+  const res = await requestJson<CareRecord>('/api/records', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+  if (res) return res;
+
+  await delay(120);
+  return createLocalRecord(input);
 }
 
-export async function startCareSession(caregiverName: string) {
+export async function startCareSession(caregiverName: string, caregiverId = 'user_grandma_1') {
+  const res = await requestJson<{
+    careSessionId: string;
+    startedAt: string;
+    status: 'ACTIVE';
+    caregiverName: string;
+  }>('/api/care-sessions/start', {
+    method: 'POST',
+    body: JSON.stringify({
+      familyId: FALLBACK_FAMILY_ID,
+      childId: FALLBACK_CHILD_ID,
+      caregiverId,
+      caregiverName,
+    }),
+  });
+  if (res) return res;
+
   await delay();
   return {
     careSessionId: 'session_' + Date.now(),
@@ -107,7 +223,23 @@ export async function startCareSession(caregiverName: string) {
   };
 }
 
-export async function endCareSession(careSessionId: string, startedAt: string, counts: Record<string, number>) {
+export async function endCareSession(
+  careSessionId: string,
+  startedAt: string,
+  counts: Record<string, number>,
+) {
+  const res = await requestJson<{
+    careSessionId: string;
+    durationMinutes: number;
+    summary: string;
+    counts: Record<string, number>;
+    praise: string;
+  }>(`/api/care-sessions/${encodeURIComponent(careSessionId)}/end`, {
+    method: 'POST',
+    body: JSON.stringify({ counts }),
+  });
+  if (res) return res;
+
   await delay();
   const durationMinutes = Math.floor((Date.now() - new Date(startedAt).getTime()) / 60000);
   return {
@@ -119,7 +251,16 @@ export async function endCareSession(careSessionId: string, startedAt: string, c
   };
 }
 
-export async function saveVoiceNote(text: string) {
+export async function saveVoiceNote(text: string, careSessionId = 'session_demo') {
+  const res = await requestJson<{
+    voiceNoteId: string;
+    parsedRecord: { type: CareRecordType; memo: string; amountMl?: number };
+  }>(`/api/care-sessions/${encodeURIComponent(careSessionId)}/voice-notes`, {
+    method: 'POST',
+    body: JSON.stringify({ text, recordedBy: FALLBACK_PARENT_ID }),
+  });
+  if (res) return res;
+
   await delay();
   return {
     voiceNoteId: 'voice_' + Date.now(),
@@ -128,7 +269,6 @@ export async function saveVoiceNote(text: string) {
 }
 
 export function parseTextToRecord(text: string): { type: CareRecordType; memo: string; amountMl?: number } {
-  const t = text.toLowerCase();
   if (/(분유|수유|먹였|먹임|모유)/.test(text)) {
     const m = text.match(/(\d{2,3})\s*ml/i);
     return { type: 'FEEDING', memo: text, amountMl: m ? Number(m[1]) : undefined };
@@ -142,8 +282,29 @@ export function parseTextToRecord(text: string): { type: CareRecordType; memo: s
   return { type: 'NOTE', memo: text };
 }
 
-export async function askAgentChat(message: string): Promise<AgentCareResponse> {
+export async function askAgentChat(
+  message: string,
+  context?: {
+    caregiverId?: string;
+    careSessionId?: string;
+  },
+): Promise<AgentCareResponse> {
+  const res = await requestJson<AgentCareResponse>('/api/chat', {
+    method: 'POST',
+    body: JSON.stringify({
+      familyId: FALLBACK_FAMILY_ID,
+      childId: FALLBACK_CHILD_ID,
+      caregiverId: context?.caregiverId ?? FALLBACK_PARENT_ID,
+      careSessionId: context?.careSessionId,
+      message,
+    }),
+  });
+  if (res) return res;
   await delay(400);
+  return mockAgentResponse(message);
+}
+
+function mockAgentResponse(message: string): AgentCareResponse {
   if (/(유튜브|영상|동영상|tv|티비)/i.test(message)) {
     return {
       answer:
@@ -227,22 +388,41 @@ export async function askAgentChat(message: string): Promise<AgentCareResponse> 
   };
 }
 
-export async function listAgentNotifications() {
-  await delay();
-  return [];
+export async function listAgentNotifications(childId = FALLBACK_CHILD_ID): Promise<AgentNotification[]> {
+  const res = await requestJson<{ notifications: AgentNotification[] }>(
+    `/api/children/${encodeURIComponent(childId)}/agent-notifications`,
+  );
+  return res?.notifications ?? [];
 }
 
 export async function evaluateAgentNotifications() {
-  await delay();
-  return { notifications: [] };
+  const res = await requestJson<{ notifications: AgentNotification[] }>('/api/agent-notifications/evaluate', {
+    method: 'POST',
+    body: JSON.stringify({
+      familyId: FALLBACK_FAMILY_ID,
+      childId: FALLBACK_CHILD_ID,
+      caregiverId: FALLBACK_PARENT_ID,
+    }),
+  });
+  return res ?? { notifications: [] };
 }
 
 export async function updateAgentNotificationStatus(id: string, status: string) {
-  await delay(80);
-  return { id, status };
+  const res = await requestJson<{ id: string; status: string }>(
+    `/api/agent-notifications/${encodeURIComponent(id)}`,
+    {
+      method: 'PATCH',
+      body: JSON.stringify({ status }),
+    },
+  );
+  return res ?? { id, status };
 }
 
 export async function getChatSuggestions() {
+  const res = await requestJson<{ suggestions: string[] }>(
+    `/api/children/${FALLBACK_CHILD_ID}/chat-suggestions?caregiverId=${FALLBACK_PARENT_ID}`,
+  );
+  if (res) return res;
   await delay();
   return {
     suggestions: [

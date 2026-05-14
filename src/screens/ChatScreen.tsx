@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "@/state/app-state";
 import { IonMascot } from "@/components/IonMascot";
+import { askAgentChat } from "@/lib/api";
 import { CHAT_SUGGESTIONS, DEFAULT_RULES } from "@/lib/mock-data";
 import type { ChatMessage } from "@/lib/types";
 import { Send, ShieldCheck } from "lucide-react";
-
-type AgentReply = { reply: string };
 
 export function ChatScreen() {
   const {
@@ -28,7 +27,7 @@ export function ChatScreen() {
   const scrollerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const context = useMemo(
+  const localContext = useMemo(
     () => ({
       child: {
         name: child.name,
@@ -36,17 +35,15 @@ export function ChatScreen() {
         feedingType: child.feedingType,
       },
       currentUser: { name: currentUser.name, role: currentUser.role },
-      session: session
-        ? { caregiver: session.caregiverName, startedAt: session.startedAt }
-        : null,
+      session: session ? { caregiver: session.caregiverName, startedAt: session.startedAt } : null,
       childMood,
       familyRules: [...DEFAULT_RULES, ...parentRules],
       recentRecords: records.slice(0, 30).map((r) => ({
         type: r.type,
-        at: r.at,
+        recordedAt: r.recordedAt,
         memo: r.memo,
         amountMl: r.amountMl,
-        by: r.recordedBy,
+        by: r.recordedByName,
       })),
       checklist: checklist.slice(0, 30).map((c) => ({
         date: c.date,
@@ -78,21 +75,17 @@ export function ChatScreen() {
     setLoading(true);
     setError(null);
     try {
-      const history = [...chatMessages, userMsg].map((m) => ({
-        role: m.role,
-        text: m.text ?? m.response?.answer ?? "",
-      }));
-      const res = await fetch("/api/agent", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ messages: history, context }),
+      // 서버가 매 요청마다 최신 아이 상태/권한/기록 컨텍스트를 다시 조립한다.
+      // localContext는 현재 UI에서 어떤 맥락을 보고 있는지 유지하기 위한 화면용 스냅샷이다.
+      void localContext;
+      const response = await askAgentChat(trimmed, {
+        caregiverId: currentUser.id,
+        careSessionId: session?.id,
       });
-      if (!res.ok) throw new Error(`agent ${res.status}`);
-      const data = (await res.json()) as AgentReply;
       addChatMessage({
         id: "a" + Date.now(),
         role: "agent",
-        text: data.reply,
+        response,
         at: new Date().toISOString(),
       });
     } catch (e) {
@@ -151,10 +144,7 @@ export function ChatScreen() {
         </div>
       </header>
 
-      <div
-        ref={scrollerRef}
-        className="flex-1 min-h-0 px-4 py-4 space-y-3 overflow-y-auto"
-      >
+      <div ref={scrollerRef} className="flex-1 min-h-0 px-4 py-4 space-y-3 overflow-y-auto">
         {chatMessages.length === 0 && (
           <div className="space-y-4">
             <div className="rounded-2xl bg-mint/30 border border-mint/40 p-3">
@@ -170,9 +160,7 @@ export function ChatScreen() {
               </div>
             </div>
             <div>
-              <p className="text-xs font-bold text-foreground/70 px-1 mb-2">
-                💬 자주 묻는 질문
-              </p>
+              <p className="text-xs font-bold text-foreground/70 px-1 mb-2">💬 자주 묻는 질문</p>
               <div className="flex flex-wrap gap-2">
                 {CHAT_SUGGESTIONS.map((s) => (
                   <button

@@ -12,8 +12,12 @@ const tabs: { id: Screen; label: string; icon: typeof Home }[] = [
 export function BottomNav() {
   const { screen, navigate, notifications, currentUser } = useApp();
   const unread = notifications.filter((n) => n.status === "UNREAD").length;
-  const isAdmin = currentUser.role === "PARENT_ADMIN";
-  const visibleTabs = tabs.filter((t) => isAdmin || (t.id !== "records" && t.id !== "family"));
+  const isParent = currentUser.role === "PARENT_ADMIN" || currentUser.role === "PARENT_EDITOR";
+  const visibleTabs = isParent
+    ? tabs
+    : currentUser.role === "CAREGIVER_EDITOR"
+      ? tabs.filter((t) => t.id === "dashboard" || t.id === "careMode" || t.id === "chat")
+      : tabs.filter((t) => t.id === "dashboard" || t.id === "chat");
 
   return (
     <nav className="absolute bottom-0 inset-x-0 z-40 bg-card/95 backdrop-blur border-t border-border safe-bottom">
@@ -24,17 +28,12 @@ export function BottomNav() {
         {visibleTabs.map((t) => {
           const Active = screen === t.id;
           const Icon = t.icon;
-          const dimmed = false;
           return (
             <li key={t.id}>
               <button
                 onClick={() => navigate(t.id)}
                 className={`relative w-full flex flex-col items-center gap-1 py-1.5 rounded-xl transition-colors ${
-                  Active
-                    ? "text-primary"
-                    : dimmed
-                      ? "text-muted-foreground/50"
-                      : "text-muted-foreground"
+                  Active ? "text-primary" : "text-muted-foreground"
                 }`}
               >
                 <Icon size={22} strokeWidth={Active ? 2.4 : 2} />

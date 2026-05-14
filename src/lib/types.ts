@@ -32,20 +32,30 @@ export type AgentCareResponse = {
 
 export type Child = {
   id: string;
+  familyId?: string;
   name: string;
   ageInMonths: number;
   birthDate: string;
   feedingType: 'BREAST' | 'FORMULA' | 'MIXED' | 'SOLID';
+  allergies?: string;
+  medicalNotes?: string;
+  careNotes?: string;
 };
 
 export type CareRecord = {
   id: string;
+  familyId: string;
+  childId: string;
+  careSessionId?: string;
   type: CareRecordType;
-  at: string; // ISO
+  value?: string;
   amountMl?: number;
+  recordedAt: string; // ISO
   memo?: string;
-  recordedBy: string;
+  recordedBy: string; // 사용자 ID
+  recordedByName: string;
   source: RecordSource;
+  photoUrl?: string;
 };
 
 export type FamilyMember = {
@@ -91,8 +101,11 @@ export type ChatMessage = {
 
 export type CareSession = {
   id: string;
+  familyId: string;
+  childId: string;
   caregiverId: string;
   caregiverName: string;
+  relationship: string;
   startedAt: string;
   endedAt?: string;
   status: 'ACTIVE' | 'ENDED';

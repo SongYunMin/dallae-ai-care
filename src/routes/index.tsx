@@ -1,57 +1,16 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { AppProvider, useApp } from "@/state/app-state";
-import { MobileShell } from "@/components/MobileShell";
-import { SplashScreen } from "@/screens/SplashScreen";
-import { OnboardingScreen } from "@/screens/OnboardingScreen";
-import { DashboardScreen } from "@/screens/DashboardScreen";
-import { RecordsScreen, RecordNewScreen } from "@/screens/RecordsScreen";
-import { CareModeScreen } from "@/screens/CareModeScreen";
-import { ChatScreen } from "@/screens/ChatScreen";
-import { NotificationsScreen } from "@/screens/NotificationsScreen";
-import { FamilyScreen } from "@/screens/FamilyScreen";
-import { InviteScreen } from "@/screens/InviteScreen";
-import { RulesScreen } from "@/screens/RulesScreen";
-import { ReportScreen } from "@/screens/ReportScreen";
-import { ChecklistScreen } from "@/screens/ChecklistScreen";
-import { ThankYouReportScreen } from "@/screens/ThankYouReportScreen";
+import { createFileRoute } from '@tanstack/react-router';
+import { ScreenRoute } from '@/components/ScreenRoute';
+import { SplashScreen } from '@/screens/SplashScreen';
 
-export const Route = createFileRoute("/")({
+export const Route = createFileRoute('/')({
   component: Index,
-  head: () => ({
-    meta: [
-      { title: "달래 — AI 돌봄 에이전트" },
-      { name: "description", content: "아이를 함께 돌보는 AI 돌봄 에이전트, 달래." },
-    ],
-  }),
 });
 
-function Inner() {
-  const { screen } = useApp();
-  const noNav = screen === "splash" || screen === "onboarding" || screen === "invite" || screen === "report" || screen === "thankYouReport";
-  return (
-    <MobileShell hideNav={noNav} flushBottom={screen === "chat"}>
-      {screen === "splash" && <SplashScreen />}
-      {screen === "onboarding" && <OnboardingScreen />}
-      {screen === "dashboard" && <DashboardScreen />}
-      {screen === "records" && <RecordsScreen />}
-      {screen === "recordNew" && <RecordNewScreen />}
-      {screen === "careMode" && <CareModeScreen />}
-      {screen === "chat" && <ChatScreen />}
-      {screen === "notifications" && <NotificationsScreen />}
-      {screen === "family" && <FamilyScreen />}
-      {screen === "invite" && <InviteScreen />}
-      {screen === "rules" && <RulesScreen />}
-      {screen === "report" && <ReportScreen />}
-      {screen === "thankYouReport" && <ThankYouReportScreen />}
-      {screen === "checklist" && <ChecklistScreen />}
-    </MobileShell>
-  );
-}
-
+// 루트 경로는 스플래시 화면만 렌더링하고, 공통 상태/쉘은 상위 라우트에서 제공한다.
 function Index() {
   return (
-    <AppProvider>
-      <Inner />
-    </AppProvider>
+    <ScreenRoute hideNav>
+      <SplashScreen />
+    </ScreenRoute>
   );
 }
