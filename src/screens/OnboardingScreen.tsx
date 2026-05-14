@@ -13,7 +13,7 @@ const feedingOptions = [
 ];
 
 export function OnboardingScreen() {
-  const { navigate, toast, setCurrentUser } = useApp();
+  const { navigate, toast, applyOnboardingResult, exitDemoMode } = useApp();
   const [parentName, setParentName] = useState('엄마');
   const [childName, setChildName] = useState('하린');
   const [birthDate, setBirthDate] = useState('2025-11-07');
@@ -24,18 +24,24 @@ export function OnboardingScreen() {
   const [careNote, setCareNote] = useState('영상보다 장난감으로 달래기');
 
   const submit = async () => {
-    await createParentOnboarding({
-      parentName,
-      childName,
-      birthDate,
-      feedingType,
-      allergies,
-      medicalNotes: medical,
-      careNotes: careNote,
-    });
-    setCurrentUser({ id: 'user_parent_1', name: parentName, role: 'PARENT_ADMIN' });
-    toast(`${childName}이의 돌봄 정보가 저장되었어요.`);
-    navigate('dashboard');
+    exitDemoMode();
+    try {
+      const result = await createParentOnboarding({
+        parentName,
+        childName,
+        birthDate,
+        feedingType,
+        allergies,
+        medicalNotes: medical,
+        routineNotes: routine,
+        careNotes: careNote,
+      });
+      applyOnboardingResult(result);
+      toast(`${childName}이의 돌봄 정보가 저장되었어요.`);
+      navigate('dashboard');
+    } catch (err) {
+      toast(err instanceof Error ? err.message : '아이 정보를 저장하지 못했어요.');
+    }
   };
 
   return (

@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "@/state/app-state";
 import { IonMascot } from "@/components/IonMascot";
-import { DEFAULT_RULES } from "@/lib/mock-data";
 import {
   createCareRecord,
   createThankYouMessage,
   endCareSession,
   parseTextToRecord,
+  saveVoiceNote,
   startCareSession,
 } from "@/lib/api";
 import { formatDuration, formatTime } from "@/lib/date";
@@ -42,6 +42,16 @@ const quick: { type: CareRecordType; label: string }[] = [
   { type: "MEDICINE", label: "약 먹였어요" },
 ];
 
+const TYPE_LABEL: Record<CareRecordType, string> = {
+  FEEDING: "수유",
+  DIAPER: "기저귀",
+  SLEEP_START: "낮잠 시작",
+  SLEEP_END: "낮잠 종료",
+  MEDICINE: "약",
+  CRYING: "울음",
+  NOTE: "메모",
+};
+
 const MOOD_OPTIONS: { emoji: string; label: string; image: string }[] = [
   { emoji: "😄", label: "기쁨", image: moodHappy },
   { emoji: "😮", label: "놀람", image: moodSurprised },
@@ -56,7 +66,7 @@ const MOOD_OPTIONS: { emoji: string; label: string; image: string }[] = [
 function caregiverDisplayName(session: CareSession) {
   const name = session.caregiverName.trim();
   const relationship = session.relationship.trim();
-  // 기존에 잘못 저장된 세션도 관계명으로 상단 표시를 보정한다.
+  // 이전 초대 화면의 기본값 때문에 이름이 "할머니"로 저장된 세션은 관계명으로 상단 표시를 보정한다.
   if (name === "할머니" && relationship && relationship !== name) return relationship;
   return name || relationship || "돌봄자";
 }
@@ -69,6 +79,7 @@ export function CareModeScreen() {
     addRecord,
     addThankYouReport,
     parentThankYouMessage,
+    parentRules,
     child,
     currentUser,
     toast,
@@ -81,7 +92,10 @@ export function CareModeScreen() {
   const [listening, setListening] = useState(false);
   const [tick, setTick] = useState(0);
   const [moodOpen, setMoodOpen] = useState(false);
+  const [savingQuickType, setSavingQuickType] = useState<CareRecordType | null>(null);
+  const [clientReady, setClientReady] = useState(false);
   const isParent = currentUser.role === "PARENT_ADMIN" || currentUser.role === "PARENT_EDITOR";
+  const canWriteRecords = currentUser.role !== "CAREGIVER_VIEWER";
   const recordsRef = useRef(records);
 
   useEffect(() => {
@@ -94,6 +108,11 @@ export function CareModeScreen() {
     return () => clearInterval(t);
   }, [session]);
   void tick;
+
+  useEffect(() => {
+    // 서버와 클라이언트에서 생성 시간이 달라지는 시간 기반 기록은 마운트 이후에만 화면에 붙여 hydration 차이를 피한다.
+    setClientReady(true);
+  }, []);
 
   if (!session && !isParent) {
     return (
@@ -118,12 +137,15 @@ export function CareModeScreen() {
         <div className="rounded-3xl bg-card shadow-card p-4">
           <p className="font-bold text-sm">꼭 지킬 가족 규칙</p>
           <div className="mt-2 space-y-1.5">
-            {DEFAULT_RULES.map((r) => (
+            {parentRules.map((r) => (
               <div key={r} className="text-xs flex gap-2">
                 <span className="text-mint-foreground">●</span>
                 <span>{r}</span>
               </div>
             ))}
+            {parentRules.length === 0 && (
+              <p className="text-xs text-muted-foreground">아직 불러온 가족 규칙이 없어요.</p>
+            )}
           </div>
         </div>
 
@@ -158,38 +180,63 @@ export function CareModeScreen() {
   }
 
   const onQuick = async (type: CareRecordType, label: string) => {
-    const r = await createCareRecord({
-      type,
-      recordedBy: currentUser.id,
-      recordedByName: currentUser.name,
-      source: "MANUAL",
-      memo: label,
-      careSessionId: session?.id,
-    });
-    recordsRef.current = [r, ...recordsRef.current.filter((item) => item.id !== r.id)];
-    addRecord(r);
-    toast(`${label} · 기록했어요`);
+    if (!canWriteRecords) {
+      toast("조회 전용 권한이라 기록할 수 없어요.");
+      return;
+    }
+    if (savingQuickType) return;
+    setSavingQuickType(type);
+    try {
+      // 버튼을 누른 자리에서 저장 진행 상태를 보여주고, 완료 후 같은 화면의 최근 기록에 즉시 반영한다.
+      const r = await createCareRecord({
+        type,
+        recordedBy: currentUser.id,
+        recordedByName: currentUser.name,
+        source: "MANUAL",
+        memo: label,
+        careSessionId: session?.id,
+      });
+      recordsRef.current = [r, ...recordsRef.current.filter((item) => item.id !== r.id)];
+      addRecord(r);
+      toast(`${label} · 기록했어요`);
+    } catch {
+      toast("기록 저장에 실패했어요. 잠시 후 다시 눌러주세요.");
+    } finally {
+      setSavingQuickType(null);
+    }
   };
 
   const onTextRecord = async () => {
     if (!text.trim()) return;
-    const parsed = parseTextToRecord(text);
-    const r = await createCareRecord({
-      type: parsed.type,
-      amountMl: parsed.amountMl,
-      memo: text,
-      recordedBy: currentUser.id,
-      recordedByName: currentUser.name,
-      source: "VOICE",
-      careSessionId: session?.id,
-    });
-    recordsRef.current = [r, ...recordsRef.current.filter((item) => item.id !== r.id)];
-    addRecord(r);
-    toast("음성 기록을 저장했어요");
-    setText("");
+    if (!canWriteRecords) {
+      toast("조회 전용 권한이라 기록할 수 없어요.");
+      return;
+    }
+
+    try {
+      const memo = text.trim();
+      const r = session
+        ? (await saveVoiceNote(memo, session.id, currentUser.id)).createdRecord
+        : await createCareRecord({
+            ...parseTextToRecord(memo),
+            recordedBy: currentUser.id,
+            recordedByName: currentUser.name,
+            source: "VOICE",
+          });
+      recordsRef.current = [r, ...recordsRef.current.filter((item) => item.id !== r.id)];
+      addRecord(r);
+      toast("음성 기록을 저장했어요");
+      setText("");
+    } catch (err) {
+      toast(err instanceof Error ? `기록 저장 실패: ${err.message}` : "음성 기록을 저장하지 못했어요");
+    }
   };
 
   const onVoiceRecord = () => {
+    if (!canWriteRecords) {
+      toast("조회 전용 권한이라 기록할 수 없어요.");
+      return;
+    }
     const SpeechRecognition =
       (window as unknown as { SpeechRecognition?: SpeechRecognitionCtor; webkitSpeechRecognition?: SpeechRecognitionCtor })
         .SpeechRecognition ??
@@ -224,6 +271,7 @@ export function CareModeScreen() {
   const subtitle = session
     ? `시작 ${formatTime(session.startedAt)} · ${formatDuration(session.startedAt)} 경과`
     : "세션 없이 남긴 기록도 돌보미와 함께 확인할 수 있어요";
+  const recentRecords = clientReady ? getRecentCareModeRecords(records, session) : [];
 
   return (
     <div className="flex flex-col">
@@ -250,19 +298,53 @@ export function CareModeScreen() {
               <button
                 key={q.label}
                 onClick={() => onQuick(q.type, q.label)}
-                className="h-14 rounded-2xl bg-cream font-semibold text-sm active:scale-95 transition-transform"
+                disabled={savingQuickType !== null || !canWriteRecords}
+                className="h-14 rounded-2xl bg-cream font-semibold text-sm active:scale-95 transition-transform disabled:opacity-60 disabled:active:scale-100"
               >
-                {q.label}
+                {savingQuickType === q.type ? "저장 중..." : q.label}
               </button>
             ))}
             <button
               onClick={() => setMoodOpen(true)}
-              className="h-14 rounded-2xl bg-mint/40 font-semibold text-sm active:scale-95 transition-transform"
+              disabled={!canWriteRecords}
+              className="h-14 rounded-2xl bg-mint/40 font-semibold text-sm active:scale-95 transition-transform disabled:opacity-60 disabled:active:scale-100"
             >
               😊 감정기록
             </button>
           </div>
         </div>
+
+        {recentRecords.length > 0 && (
+          <div className="rounded-3xl bg-card shadow-card p-4">
+            <div className="flex items-center justify-between">
+              <p className="font-bold text-sm">최근 기록</p>
+              <button
+                onClick={() => navigate("records")}
+                className="text-[11px] font-semibold text-mint-foreground"
+              >
+                전체 보기
+              </button>
+            </div>
+            <div className="mt-3 space-y-2">
+              {recentRecords.map((record) => (
+                <div key={record.id} className="rounded-2xl bg-cream px-3 py-2.5">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-sm font-semibold">
+                      {TYPE_LABEL[record.type]}
+                      {record.amountMl ? ` · ${record.amountMl}ml` : ""}
+                    </p>
+                    <p className="shrink-0 text-[11px] text-muted-foreground">
+                      {formatTime(record.recordedAt)}
+                    </p>
+                  </div>
+                  {record.memo && (
+                    <p className="mt-1 text-xs leading-snug text-foreground/70">{record.memo}</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {moodOpen && (
           <div
@@ -291,19 +373,25 @@ export function CareModeScreen() {
                   <button
                     key={m.label}
                     onClick={async () => {
-                      setChildMood({ emoji: m.emoji, label: m.label, image: m.image });
-                      const r = await createCareRecord({
-                        type: "NOTE",
-                        recordedBy: currentUser.id,
-                        recordedByName: currentUser.name,
-                        source: "MANUAL",
-                        memo: `감정: ${m.emoji} ${m.label}`,
-                        careSessionId: session?.id,
-                      });
-                      recordsRef.current = [r, ...recordsRef.current.filter((item) => item.id !== r.id)];
-                      addRecord(r);
-                      setMoodOpen(false);
-                      toast(`${m.emoji} ${m.label} · 감정 기록`);
+                      if (!canWriteRecords) return;
+                      try {
+                        const r = await createCareRecord({
+                          type: "NOTE",
+                          recordedBy: currentUser.id,
+                          recordedByName: currentUser.name,
+                          source: "MANUAL",
+                          memo: `감정: ${m.emoji} ${m.label}`,
+                          careSessionId: session?.id,
+                        });
+                        // 서버 저장이 성공한 감정만 전역 표정과 기록 목록에 반영한다.
+                        setChildMood({ emoji: m.emoji, label: m.label, image: m.image });
+                        recordsRef.current = [r, ...recordsRef.current.filter((item) => item.id !== r.id)];
+                        addRecord(r);
+                        setMoodOpen(false);
+                        toast(`${m.emoji} ${m.label} · 감정 기록`);
+                      } catch (err) {
+                        toast(err instanceof Error ? `감정 기록 실패: ${err.message}` : "감정 기록을 저장하지 못했어요");
+                      }
                     }}
                     className="aspect-square rounded-2xl bg-cream flex flex-col items-center justify-center gap-1 p-1 active:scale-95 transition-transform"
                   >
@@ -329,9 +417,10 @@ export function CareModeScreen() {
           <div className="flex items-center gap-2">
             <button
               onClick={onVoiceRecord}
+              disabled={!canWriteRecords}
               className={`h-12 w-12 rounded-full text-primary-foreground flex items-center justify-center shadow-soft shrink-0 ${
                 listening ? "bg-coral animate-pulse" : "bg-primary"
-              }`}
+              } disabled:opacity-50`}
               aria-label="말로 기록하기"
             >
               <Mic size={20} />
@@ -339,35 +428,41 @@ export function CareModeScreen() {
             <input
               value={text}
               onChange={(e) => setText(e.target.value)}
+              disabled={!canWriteRecords}
               placeholder="예: 지금 분유 160ml 먹였어"
-              className="flex-1 h-12 px-4 rounded-xl bg-cream border border-border text-sm"
+              className="flex-1 h-12 px-4 rounded-xl bg-cream border border-border text-sm disabled:opacity-60"
             />
             <button
               onClick={onTextRecord}
-              className="h-12 w-12 rounded-full bg-foreground text-background flex items-center justify-center shrink-0"
+              disabled={!canWriteRecords || !text.trim()}
+              className="h-12 w-12 rounded-full bg-foreground text-background flex items-center justify-center shrink-0 disabled:opacity-50"
             >
               <Send size={18} />
             </button>
           </div>
+          {!canWriteRecords && (
+            <p className="text-[11px] text-muted-foreground">조회 전용 권한이라 음성/텍스트 기록은 비활성화돼요.</p>
+          )}
         </div>
 
         {session ? (
           session.caregiverId === currentUser.id ? (
           <button
-            onClick={() => {
+            onClick={async () => {
               if (
                 typeof window !== "undefined" &&
                 !window.confirm("돌봄을 종료할까요? 부모님께 감사 메시지가 전달돼요.")
               )
                 return;
-              const ended = endSession();
-              if (!ended) return;
+              const activeSession = session;
+              if (!activeSession) return;
+              const localEnded: CareSession = { ...activeSession, status: "ENDED", endedAt: nowKstIso() };
               const sessionRecords = recordsRef.current.filter((r) => {
-                if (r.careSessionId) return r.careSessionId === ended.id;
+                if (r.careSessionId) return r.careSessionId === localEnded.id;
                 const recordedAt = new Date(r.recordedAt).getTime();
                 return (
-                  recordedAt >= new Date(ended.startedAt).getTime() &&
-                  recordedAt <= new Date(ended.endedAt ?? nowKstIso()).getTime()
+                  recordedAt >= new Date(localEnded.startedAt).getTime() &&
+                  recordedAt <= new Date(localEnded.endedAt ?? nowKstIso()).getTime()
                 );
               });
               const counts = {
@@ -377,11 +472,15 @@ export function CareModeScreen() {
                 medicine: sessionRecords.filter((r) => r.type === "MEDICINE").length,
                 voiceNotes: sessionRecords.filter((r) => r.source === "VOICE").length,
               };
-              const durationLabel = formatDuration(ended.startedAt, ended.endedAt);
-              void endCareSession(ended.id, ended.startedAt, counts).catch(() => {
-                toast("돌봄 종료 상태를 백엔드에 저장하지 못했어요");
-              });
+              try {
+                await endCareSession(localEnded.id, counts);
+              } catch (err) {
+                toast(err instanceof Error ? `돌봄 종료 실패: ${err.message}` : "돌봄 종료 상태를 백엔드에 저장하지 못했어요");
+                return;
+              }
 
+              const ended = endSession() ?? localEnded;
+              const durationLabel = formatDuration(ended.startedAt, ended.endedAt);
               const preset = (ended.thankYouMessage || parentThankYouMessage).trim();
               const baseReport = {
                 id: `thx_${ended.id}`,
@@ -402,7 +501,8 @@ export function CareModeScreen() {
                 sentAt: nowKstIso(),
               };
 
-              addThankYouReport(baseReport);
+              const savedBaseReport = await addThankYouReport(baseReport);
+              if (!savedBaseReport) return;
               navigate("thankYouReport", { careSessionId: ended.id });
 
               if (!preset) {
@@ -422,12 +522,15 @@ export function CareModeScreen() {
                   },
                 }).then((res) => {
                   if (!res?.message) return;
+                  const fromUserName = res.fallbackUsed ? "부모님 (AI 기본 응답)" : "부모님 (AI 작성)";
                   addThankYouReport({
                     ...baseReport,
-                    fromUserName: "부모님 (AI 작성)",
+                    fromUserName,
                     message: res.message,
                     sentAt: nowKstIso(),
                   });
+                }).catch(() => {
+                  toast("AI 감사 메시지를 생성하지 못해 기본 메시지를 유지했어요.");
                 });
               }
             }}
@@ -459,16 +562,35 @@ export function CareModeScreen() {
             꼭 지킬 가족 규칙
           </p>
           <div className="mt-1.5 space-y-1">
-            {DEFAULT_RULES.map((r) => (
+            {parentRules.map((r) => (
               <p key={r} className="text-xs leading-snug">
                 • {r}
               </p>
             ))}
+            {parentRules.length === 0 && (
+              <p className="text-xs text-muted-foreground">아직 불러온 가족 규칙이 없어요.</p>
+            )}
           </div>
         </div>
       </div>
     </div>
   );
+}
+
+function getRecentCareModeRecords(
+  records: CareRecord[],
+  session: CareSession | null,
+): CareRecord[] {
+  // 돌봄 세션 중에는 해당 세션 기록만 보여주고, 부모 기록 모드에서는 전체 최신 기록을 보여준다.
+  const sessionStartedAt = session ? new Date(session.startedAt).getTime() : null;
+  return records
+    .filter((record) => {
+      if (!session) return true;
+      if (record.careSessionId) return record.careSessionId === session.id;
+      return sessionStartedAt !== null && new Date(record.recordedAt).getTime() >= sessionStartedAt;
+    })
+    .sort((a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime())
+    .slice(0, 3);
 }
 
 function whenLabel(targetMs: number): string {

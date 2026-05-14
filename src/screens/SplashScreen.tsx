@@ -3,19 +3,24 @@ import { useApp } from '@/state/app-state';
 import { IonMascot } from '@/components/IonMascot';
 
 export function SplashScreen() {
-  const { navigate, toast } = useApp();
+  const { navigate, toast, enterDemoMode, exitDemoMode } = useApp();
   const [showInvite, setShowInvite] = useState(false);
   const [inviteInput, setInviteInput] = useState('');
 
   const enterAsCaregiver = () => {
+    exitDemoMode();
     const raw = inviteInput.trim();
+    if (!raw) {
+      toast('부모가 보낸 초대 링크나 코드를 입력해 주세요.');
+      return;
+    }
     // 토큰만 입력했거나 전체 URL을 붙여넣은 경우 모두 지원
     const urlMatch = raw.match(/invite[/=]([\w-]+)/);
     const token = urlMatch
       ? urlMatch[1].startsWith('invite_')
         ? urlMatch[1]
         : `invite_${urlMatch[1]}`
-      : raw || 'invite_demo123';
+      : raw;
     navigate('invite', { token });
   };
 
@@ -40,7 +45,10 @@ export function SplashScreen() {
 
       <div className="space-y-3">
         <button
-          onClick={() => navigate('onboarding')}
+          onClick={() => {
+            exitDemoMode();
+            navigate('onboarding');
+          }}
           className="w-full h-14 rounded-2xl bg-primary text-primary-foreground font-semibold text-base shadow-soft active:scale-[0.98] transition-transform"
         >
           부모로 시작하기
@@ -54,7 +62,7 @@ export function SplashScreen() {
             <input
               value={inviteInput}
               onChange={(e) => setInviteInput(e.target.value)}
-              placeholder="예: invite_demo123 또는 https://.../invite/..."
+              placeholder="예: invite_ab12cd34 또는 https://.../invite/..."
               className="w-full h-11 px-3 rounded-xl bg-cream border border-border text-sm"
             />
             <div className="flex gap-2">
@@ -74,15 +82,6 @@ export function SplashScreen() {
                 입장하기
               </button>
             </div>
-            <button
-              onClick={() => {
-                setInviteInput('invite_demo123');
-                toast('데모 초대코드를 채웠어요');
-              }}
-              className="w-full text-[11px] text-muted-foreground underline"
-            >
-              데모 초대코드 사용
-            </button>
           </div>
         ) : (
           <button
@@ -94,7 +93,10 @@ export function SplashScreen() {
         )}
 
         <button
-          onClick={() => navigate('dashboard')}
+          onClick={() => {
+            enterDemoMode();
+            navigate('dashboard');
+          }}
           className="w-full text-sm text-muted-foreground py-2"
         >
           데모 둘러보기 →

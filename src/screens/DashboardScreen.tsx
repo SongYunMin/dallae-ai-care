@@ -1,23 +1,14 @@
 import { useApp } from "@/state/app-state";
 import { IonMascot } from "@/components/IonMascot";
-import { DEFAULT_RULES } from "@/lib/mock-data";
 import {
   Bell,
   MessageCircle,
   Sparkles,
   ChevronRight,
-  Milk,
-  Baby,
-  Moon,
+  ClipboardList,
 } from "lucide-react";
 import { todayKey } from "@/lib/checklist";
-import { buildCareBriefings, type CareBriefingItem } from "@/lib/care-briefing";
-
-const BRIEFING_ICONS: Record<CareBriefingItem["kind"], typeof Milk> = {
-  feeding: Milk,
-  diaper: Baby,
-  sleep: Moon,
-};
+import { buildDailyCareBriefing } from "@/lib/care-briefing";
 
 export function DashboardScreen() {
   const { child, records, currentUser, session, notifications, navigate, parentRules, checklist, childMood } =
@@ -28,12 +19,12 @@ export function DashboardScreen() {
   const doneCount = todayItems.filter((c) => c.completed).length;
 
   const unread = notifications.filter((n) => n.status === "UNREAD");
-  const briefings = buildCareBriefings(records, child);
+  const dailyBriefing = buildDailyCareBriefing(records, child);
 
-  const ageDays = Math.max(
-    0,
-    Math.floor((Date.now() - new Date(child.birthDate).getTime()) / (1000 * 60 * 60 * 24)),
-  );
+  const birthTime = Date.parse(child.birthDate);
+  const ageDays = Number.isFinite(birthTime)
+    ? Math.max(0, Math.floor((Date.now() - birthTime) / (1000 * 60 * 60 * 24)))
+    : 0;
   const sortedRecords = [...records].sort(
     (a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime(),
   );
@@ -60,7 +51,7 @@ export function DashboardScreen() {
         <div>
           <p className="text-xs font-medium text-foreground/70">{currentUser.name}님, 안녕하세요</p>
           <h1 className="text-xl font-bold mt-1">
-            오늘의 <span className="text-primary">AI 브리핑</span>
+            {child.name} · {child.ageInMonths}개월 ({ageDays}일)
           </h1>
         </div>
         <button
@@ -88,11 +79,11 @@ export function DashboardScreen() {
               <Sparkles size={10} /> AI 돌봄 에이전트
             </span>
             <span className="text-[10px] font-semibold text-mint-foreground">
-              {child.name}이의 최근 기록 분석 중
+              {child.name}이의 다음 돌봄 분석 중
             </span>
           </div>
 
-          <div className="relative flex gap-3 items-center">
+          <div className="relative flex gap-3 items-start">
             <div className="relative rounded-2xl bg-card/80 p-1 shrink-0">
               <IonMascot variant="wink" size={56} />
               {childMood && (
@@ -108,9 +99,13 @@ export function DashboardScreen() {
                 </span>
               )}
             </div>
-            <div className="flex-1">
-              <p className="text-sm font-bold leading-snug">
-                {child.name} · {child.ageInMonths}개월 ({ageDays}일)
+            <div className="flex-1 min-w-0 pt-0.5">
+              <p className="text-[11px] font-bold text-mint-foreground">오늘의 AI 브리핑</p>
+              <p className="text-base font-bold leading-snug mt-1">
+                {dailyBriefing.headline}
+              </p>
+              <p className="text-[11px] text-foreground/65 leading-snug mt-1">
+                최근 기록을 바탕으로 다음 돌봄을 정리했어요.
               </p>
             </div>
             <button
@@ -122,14 +117,22 @@ export function DashboardScreen() {
             </button>
           </div>
 
-          {/* 최근 기록만 근거로 한 홈 브리핑. 알림 목록과 섞지 않는다. */}
-          <div className="relative space-y-2">
-            <p className="text-[11px] font-bold text-foreground/70">최근 기록 기반 브리핑</p>
-            <div className="space-y-1.5">
-              {briefings.map((item) => (
-                <BriefingCard key={item.kind} item={item} />
-              ))}
+          {/* 최근 기록을 한 장 카드로 요약해 다음 수유, 수면, 주의사항을 바로 보이게 한다. */}
+          <div className="relative rounded-2xl bg-card/90 backdrop-blur px-4 py-3 space-y-2">
+            <div className="flex items-center gap-2">
+              <span className="h-8 w-8 rounded-xl bg-cream flex items-center justify-center shrink-0">
+                <ClipboardList size={16} />
+              </span>
+              <p className="font-bold text-sm">{dailyBriefing.title}</p>
             </div>
+            <ul className="space-y-1.5">
+              {dailyBriefing.lines.map((line) => (
+                <li key={line} className="flex gap-2 text-[12px] leading-snug text-foreground/80">
+                  <span className="mt-[0.45em] h-1.5 w-1.5 rounded-full bg-mint-foreground/70 shrink-0" />
+                  <span>{line}</span>
+                </li>
+              ))}
+            </ul>
             <button
               onClick={() => navigate("records")}
               className="w-full text-[12px] font-semibold text-foreground/70 flex items-center justify-center gap-1 py-1 active:scale-95 transition-transform"
@@ -207,37 +210,18 @@ export function DashboardScreen() {
             </button>
           </div>
           <div className="space-y-1.5">
-            {DEFAULT_RULES.map((r) => (
+            {parentRules.map((r) => (
               <div key={r} className="flex gap-2 text-xs">
                 <span className="text-mint-foreground font-bold">●</span>
                 <span className="text-foreground/85">{r}</span>
               </div>
             ))}
-            {parentRules.map((r) => (
-              <div key={r} className="flex gap-2 text-xs">
-                <span className="text-primary font-bold">●</span>
-                <span className="text-foreground/85">{r}</span>
-              </div>
-            ))}
+            {parentRules.length === 0 && (
+              <p className="text-xs text-muted-foreground">아직 불러온 가족 규칙이 없어요.</p>
+            )}
           </div>
         </div>
 
-      </div>
-    </div>
-  );
-}
-
-function BriefingCard({ item }: { item: CareBriefingItem }) {
-  const Icon = BRIEFING_ICONS[item.kind];
-  return (
-    <div className="rounded-2xl bg-card/90 backdrop-blur px-3 py-2.5 flex gap-2">
-      <span className={`h-8 w-8 rounded-xl flex items-center justify-center shrink-0 ${item.tone}`}>
-        <Icon size={16} />
-      </span>
-      <div className="min-w-0">
-        <p className="text-[11px] font-bold text-foreground/60">{item.label}</p>
-        <p className="text-[13px] font-bold leading-snug">{item.title}</p>
-        <p className="text-[11px] text-foreground/65 leading-snug mt-0.5">{item.detail}</p>
       </div>
     </div>
   );

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useApp } from '@/state/app-state';
 import { formatTime } from '@/lib/date';
-import { getThankYouReport } from '@/lib/api';
+import { getCareSession, getLatestCareSession, getThankYouReport } from '@/lib/api';
 import type { CareRecord, CareSession, ThankYouReport } from '@/lib/types';
 import { ClipboardList, MessageCircleHeart, Sparkles } from 'lucide-react';
 import heroImg from '@/assets/thankyou-hero.png';
@@ -40,23 +40,60 @@ function collectSessionRecords(
 }
 
 export function ThankYouReportScreen() {
-  const { payload, lastEndedSession, records, thankYouReports, navigate } = useApp();
-  const routeSessionId = (payload as { careSessionId?: string } | null)?.careSessionId;
-  const session = lastEndedSession;
+  const { payload, lastEndedSession, records, thankYouReports, navigate, child } = useApp();
+  const routeSessionId = (payload as { careSessionId?: string } | null)?.careSessionId ?? 'latest';
+  const localSession =
+    routeSessionId === 'latest'
+      ? lastEndedSession
+      : lastEndedSession?.id === routeSessionId
+        ? lastEndedSession
+        : null;
+  const [loadedSession, setLoadedSession] = useState<CareSession | null>(null);
+  const session = localSession ?? loadedSession;
   const targetSessionId = routeSessionId && routeSessionId !== 'latest' ? routeSessionId : session?.id;
   const localReport = targetSessionId
     ? thankYouReports.find((report) => report.sessionId === targetSessionId)
     : thankYouReports[0];
   const [loadedReport, setLoadedReport] = useState<ThankYouReport | null>(null);
+  const [reportError, setReportError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    setLoadedSession(null);
+    if (localSession) return () => {
+      mounted = false;
+    };
+
+    const request =
+      routeSessionId === 'latest'
+        ? getLatestCareSession(child.id)
+        : getCareSession(routeSessionId);
+    request
+      .then((next) => {
+        if (mounted) setLoadedSession(next);
+      })
+      .catch(() => {
+        if (mounted) setLoadedSession(null);
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, [child.id, localSession, routeSessionId]);
 
   useEffect(() => {
     setLoadedReport(null);
+    setReportError(null);
     if (!targetSessionId || localReport) return;
 
     // 공유 링크나 새로고침으로 직접 진입한 경우 로컬 상태에 없는 리포트를 API에서 보강한다.
-    void getThankYouReport(targetSessionId).then((loaded) => {
-      if (loaded) setLoadedReport(loaded);
-    });
+    void getThankYouReport(targetSessionId)
+      .then((loaded) => {
+        if (loaded) setLoadedReport(loaded);
+      })
+      .catch((err) => {
+        setReportError(err instanceof Error ? err.message : '수고 메시지를 찾지 못했어요.');
+      });
   }, [localReport, targetSessionId]);
 
   const report = localReport ?? loadedReport;
@@ -78,7 +115,8 @@ export function ThankYouReportScreen() {
         />
       </div>
 
-      <div className="flex-1 px-5 -mt-6 pb-8 space-y-4">
+      {/* 히어로 이미지와 리포트 카드가 겹치지 않도록 정상 문서 흐름 안에서 간격을 둔다. */}
+      <div className="relative z-10 flex-1 px-5 pt-4 pb-8 space-y-4">
         {report ? (
           <div className="rounded-3xl bg-card shadow-card p-5 space-y-3">
             <p className="text-xs text-muted-foreground">
@@ -102,7 +140,7 @@ export function ThankYouReportScreen() {
           </div>
         ) : (
           <div className="rounded-3xl bg-card shadow-card p-5 text-center text-sm text-muted-foreground">
-            아직 도착한 수고 메시지가 없어요
+            {reportError ? `수고 메시지를 불러오지 못했어요: ${reportError}` : '아직 도착한 수고 메시지가 없어요'}
           </div>
         )}
 

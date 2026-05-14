@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "@/state/app-state";
 import { IonMascot } from "@/components/IonMascot";
-import { askAgentChat } from "@/lib/api";
-import { CHAT_SUGGESTIONS, DEFAULT_RULES } from "@/lib/mock-data";
+import { askAgentChat, getChatSuggestions } from "@/lib/api";
+import { CHAT_SUGGESTIONS, makeDemoAgentResponse } from "@/lib/mock-data";
 import type { ChatMessage } from "@/lib/types";
 import { nowKstIso } from "@/lib/kst";
 import { Send, ShieldCheck } from "lucide-react";
@@ -21,10 +21,14 @@ export function ChatScreen() {
     childMood,
     notifications,
     session,
+    demoMode,
+    toast,
   } = useApp();
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [suggestionError, setSuggestionError] = useState<string | null>(null);
   const scrollerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -38,7 +42,7 @@ export function ChatScreen() {
       currentUser: { name: currentUser.name, role: currentUser.role },
       session: session ? { caregiver: session.caregiverName, startedAt: session.startedAt } : null,
       childMood,
-      familyRules: [...DEFAULT_RULES, ...parentRules],
+      familyRules: parentRules,
       recentRecords: records.slice(0, 30).map((r) => ({
         type: r.type,
         recordedAt: r.recordedAt,
@@ -79,10 +83,12 @@ export function ChatScreen() {
       // 서버가 매 요청마다 최신 아이 상태/권한/기록 컨텍스트를 다시 조립한다.
       // localContext는 현재 UI에서 어떤 맥락을 보고 있는지 유지하기 위한 화면용 스냅샷이다.
       void localContext;
-      const response = await askAgentChat(trimmed, {
-        caregiverId: currentUser.id,
-        careSessionId: session?.id,
-      });
+      const response = demoMode
+        ? makeDemoAgentResponse(trimmed)
+        : await askAgentChat(trimmed, {
+            caregiverId: currentUser.id,
+            careSessionId: session?.id,
+          });
       addChatMessage({
         id: "a" + Date.now(),
         role: "agent",
@@ -116,6 +122,33 @@ export function ChatScreen() {
     inputRef.current?.focus();
   }, []);
 
+  useEffect(() => {
+    let mounted = true;
+    setSuggestionError(null);
+    if (demoMode) {
+      setSuggestions(CHAT_SUGGESTIONS);
+      return () => {
+        mounted = false;
+      };
+    }
+
+    // 일반 모드는 추천 질문도 API 결과만 보여준다. 실패해도 정적 목록으로 대체하지 않는다.
+    getChatSuggestions(currentUser.id, child.id)
+      .then((next) => {
+        if (mounted) setSuggestions(next);
+      })
+      .catch((err) => {
+        if (!mounted) return;
+        setSuggestions([]);
+        const message = err instanceof Error ? err.message : '추천 질문을 불러오지 못했어요.';
+        setSuggestionError(message);
+        toast(`추천 질문 로드 실패: ${message}`);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [child.id, currentUser.id, demoMode, toast]);
+
   return (
     <div className="flex flex-col h-full min-h-0">
       <header className="px-5 pt-7 pb-3 gradient-hero shrink-0">
@@ -136,7 +169,7 @@ export function ChatScreen() {
           </p>
           <p className="text-muted-foreground">
             기록 {records.length}건 · 체크리스트 {checklist.length}건 · 규칙{" "}
-            {DEFAULT_RULES.length + parentRules.length}개
+            {parentRules.length}개
             {childMood ? ` · 감정 ${childMood.emoji} ${childMood.label}` : ""}
           </p>
           <p className="text-mint-foreground font-semibold flex items-center gap-1">
@@ -163,7 +196,7 @@ export function ChatScreen() {
             <div>
               <p className="text-xs font-bold text-foreground/70 px-1 mb-2">💬 자주 묻는 질문</p>
               <div className="flex flex-wrap gap-2">
-                {CHAT_SUGGESTIONS.map((s) => (
+                {suggestions.map((s) => (
                   <button
                     key={s}
                     onClick={() => send(s)}
@@ -173,6 +206,11 @@ export function ChatScreen() {
                   </button>
                 ))}
               </div>
+              {suggestions.length === 0 && (
+                <p className="text-xs text-muted-foreground px-1">
+                  {suggestionError ? `추천 질문을 불러오지 못했어요: ${suggestionError}` : '추천 질문이 없어요.'}
+                </p>
+              )}
             </div>
           </div>
         )}
@@ -192,7 +230,12 @@ export function ChatScreen() {
             <div key={m.id} className="flex items-start gap-2">
               <IonMascot variant="basic" size={32} />
               <div className="flex-1 max-w-[88%] rounded-2xl rounded-tl-sm bg-card border border-border px-4 py-2.5 text-sm whitespace-pre-wrap leading-relaxed">
-                {body}
+                <p>{body}</p>
+                {m.response?.fallbackUsed && (
+                  <span className="mt-2 inline-flex text-[10px] font-bold rounded-full bg-warning/40 text-warning-foreground px-2 py-0.5">
+                    기본 응답
+                  </span>
+                )}
               </div>
             </div>
           );

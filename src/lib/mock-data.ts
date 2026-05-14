@@ -1,4 +1,4 @@
-import type { AgentNotification, CareRecord, Child, FamilyMember } from './types';
+import type { AgentCareResponse, AgentNotification, CareRecord, Child, FamilyMember } from './types';
 import { nowKstIso } from './kst';
 
 const kstIsoAgo = (ms: number) => nowKstIso(new Date(Date.now() - ms));
@@ -17,6 +17,7 @@ export const MOCK_CHILD: Child = {
   feedingType: 'FORMULA',
   allergies: '없음',
   medicalNotes: '해열제는 부모 확인 후 복용',
+  routineNotes: '밤 9시 취침, 3시간 간격 수유',
   careNotes: '영상보다 장난감으로 달래기',
 };
 
@@ -30,6 +31,8 @@ export const PARENT_RULES = [
   '영상보다 장난감으로 달래기',
   '자기 전에는 조명을 어둡게 해요',
 ];
+
+export const DEMO_ACTIVE_RULES = [...DEFAULT_RULES, ...PARENT_RULES];
 
 export const MOCK_FAMILY_MEMBERS: FamilyMember[] = [
   { id: 'user_parent_1', name: '엄마', relationship: '부모', role: 'PARENT_ADMIN' },
@@ -161,3 +164,21 @@ export const QUICK_CAREGIVER_QUESTIONS = [
   '오늘 낮잠 얼마나 잤어요?',
   '지금 보채는데 어떡해요?',
 ];
+
+export function makeDemoAgentResponse(message: string): AgentCareResponse {
+  const matchedRules = DEMO_ACTIVE_RULES.filter((rule) =>
+    message.includes('약') ? rule.includes('약') : message.includes('영상') || message.includes('유튜브') ? rule.includes('영상') : true,
+  ).slice(0, 2);
+
+  return {
+    answer: `데모 응답이에요. "${message}"에 대해서는 최근 기록과 가족 규칙을 먼저 확인하고, 이상 징후가 있으면 부모에게 바로 확인해 주세요.`,
+    nextActions: ['최근 수유/수면/기저귀 기록 확인', '가족 규칙과 의료 메모 확인'],
+    ruleReminders: matchedRules,
+    recordSuggestions: ['상황이 바뀌면 메모 기록을 남겨 주세요'],
+    proactiveNotifications: [],
+    escalation: message.includes('열') || message.includes('아파') ? 'ASK_PARENT' : 'NONE',
+    agentKind: 'demo',
+    fallbackUsed: true,
+    evidence: ['데모 모드 mock-data.ts'],
+  };
+}

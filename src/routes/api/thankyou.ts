@@ -1,7 +1,6 @@
 import "@tanstack/react-start";
 import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
-import { callAdk } from "@/lib/adk";
 
 const ToneEnum = z.enum(["WARM", "FRIENDLY", "POLITE", "CHEERFUL", "CONCISE"]);
 
@@ -50,25 +49,17 @@ export const Route = createFileRoute("/api/thankyou")({
         }
 
         try {
-          // 감사 메시지도 FastAPI의 기록 DB 기반 에이전트를 먼저 사용한다.
-          const data = await callDallaeApi<{ message: string }>("/api/thankyou", parsed);
-          return Response.json({ message: data.message });
-        } catch {
-          // FastAPI가 꺼진 프론트 단독 데모에서는 기존 ADK/로컬 fallback으로 내려간다.
-        }
-
-        try {
-          const data = await callAdk<{ message: string }>("/thankyou", parsed);
-          return Response.json({ message: data.message });
+          // 감사 메시지는 FastAPI의 기록 DB 기반 에이전트 결과만 전달한다.
+          // FastAPI 내부 fallback은 fallbackUsed 메타와 함께 내려와 UI에서 기본 응답으로 표시된다.
+          const data = await callDallaeApi<{
+            message: string;
+            agentKind?: string;
+            fallbackUsed?: boolean;
+            evidence?: string[];
+          }>("/api/thankyou", parsed);
+          return Response.json(data);
         } catch (err) {
-          const msg = err instanceof Error ? err.message : "ADK error";
-          // ADK 미연결 시: 안전한 기본 메시지로 폴백
-          if (msg.includes("ADK_BASE_URL is not configured")) {
-            const { caregiverName, childName, durationLabel } = parsed;
-            return Response.json({
-              message: `${caregiverName}님, 오늘 ${durationLabel} 동안 ${childName} 돌봐주셔서 정말 고마워요. 덕분에 안심하고 하루를 보냈어요.`,
-            });
-          }
+          const msg = err instanceof Error ? err.message : "Dallae API error";
           return new Response(msg, { status: 502 });
         }
       },

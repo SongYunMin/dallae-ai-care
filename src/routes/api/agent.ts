@@ -29,15 +29,7 @@ export const Route = createFileRoute("/api/agent")({
           return Response.json({ reply: data.reply });
         } catch (err) {
           const msg = err instanceof Error ? err.message : "ADK error";
-          if (msg.includes("ADK_BASE_URL is not configured")) {
-            return Response.json(
-              {
-                reply:
-                  "(데모 모드) 아직 Google ADK 에이전트 서버가 연결되지 않았어요. ADK_BASE_URL을 설정하면 실제 답변이 표시됩니다.",
-              },
-              { status: 200 },
-            );
-          }
+          // 실제 API 라우트에서는 ADK 미연결을 데모 응답으로 위장하지 않고 오류로 노출한다.
           return new Response(msg, { status: 502 });
         }
       },
