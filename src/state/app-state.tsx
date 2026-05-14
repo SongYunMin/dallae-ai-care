@@ -47,6 +47,7 @@ type AppState = {
   familyMembers: FamilyMember[];
   currentUser: { id: string; name: string; role: UserRole };
   setCurrentUser: (u: { id: string; name: string; role: UserRole }) => void;
+  logout: () => void;
 
   records: CareRecord[];
   addRecord: (r: CareRecord) => void;
