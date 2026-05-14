@@ -84,6 +84,9 @@ type AppState = {
 
   thankYouReports: ThankYouReport[];
   addThankYouReport: (r: ThankYouReport) => void;
+
+  childMood: { emoji: string; label: string; at: string } | null;
+  setChildMood: (m: { emoji: string; label: string } | null) => void;
 };
 
 const Ctx = createContext<AppState | null>(null);
