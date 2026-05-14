@@ -7,6 +7,14 @@ import { formatDuration, formatTime } from "@/lib/date";
 import { itemDateTime, todayKey, formatItemTime } from "@/lib/checklist";
 import type { CareRecord, CareRecordType, ChecklistItem } from "@/lib/types";
 import { Mic, Send, X } from "lucide-react";
+import moodHappy from "@/assets/moods/happy.png";
+import moodSurprised from "@/assets/moods/surprised.png";
+import moodSad from "@/assets/moods/sad.png";
+import moodAngry from "@/assets/moods/angry.png";
+import moodHungry from "@/assets/moods/hungry.png";
+import moodSick from "@/assets/moods/sick.png";
+import moodSleepy from "@/assets/moods/sleepy.png";
+import moodCurious from "@/assets/moods/curious.png";
 
 const quick: { type: CareRecordType; label: string }[] = [
   { type: "FEEDING", label: "분유 먹였어요" },
@@ -16,19 +24,15 @@ const quick: { type: CareRecordType; label: string }[] = [
   { type: "MEDICINE", label: "약 먹였어요" },
 ];
 
-const MOOD_OPTIONS: { emoji: string; label: string }[] = [
-  { emoji: "😄", label: "기쁨" },
-  { emoji: "😊", label: "행복" },
-  { emoji: "😮", label: "놀람" },
-  { emoji: "😢", label: "슬픔" },
-  { emoji: "😭", label: "울음" },
-  { emoji: "😠", label: "화남" },
-  { emoji: "😴", label: "졸림" },
-  { emoji: "🤒", label: "아픔" },
-  { emoji: "🍔", label: "배고픔" },
-  { emoji: "❤️", label: "사랑" },
-  { emoji: "❓", label: "궁금" },
-  { emoji: "😌", label: "편안" },
+const MOOD_OPTIONS: { emoji: string; label: string; image: string }[] = [
+  { emoji: "😄", label: "기쁨", image: moodHappy },
+  { emoji: "😮", label: "놀람", image: moodSurprised },
+  { emoji: "😢", label: "슬픔", image: moodSad },
+  { emoji: "😠", label: "화남", image: moodAngry },
+  { emoji: "🍔", label: "배고픔", image: moodHungry },
+  { emoji: "🤒", label: "아픔", image: moodSick },
+  { emoji: "😴", label: "졸림", image: moodSleepy },
+  { emoji: "❓", label: "궁금", image: moodCurious },
 ];
 
 export function CareModeScreen() {
@@ -204,7 +208,7 @@ export function CareModeScreen() {
                   <button
                     key={m.label}
                     onClick={async () => {
-                      setChildMood({ emoji: m.emoji, label: m.label });
+                      setChildMood({ emoji: m.emoji, label: m.label, image: m.image });
                       const r = await createCareRecord({
                         type: "NOTE",
                         recordedBy: currentUser.name,
@@ -215,9 +219,14 @@ export function CareModeScreen() {
                       setMoodOpen(false);
                       toast(`${m.emoji} ${m.label} · 감정 기록`);
                     }}
-                    className="aspect-square rounded-2xl bg-cream flex flex-col items-center justify-center gap-0.5 active:scale-95 transition-transform"
+                    className="aspect-square rounded-2xl bg-cream flex flex-col items-center justify-center gap-1 p-1 active:scale-95 transition-transform"
                   >
-                    <span className="text-2xl leading-none">{m.emoji}</span>
+                    <img
+                      src={m.image}
+                      alt={m.label}
+                      className="h-12 w-12 object-contain"
+                      draggable={false}
+                    />
                     <span className="text-[10px] font-semibold">{m.label}</span>
                   </button>
                 ))}

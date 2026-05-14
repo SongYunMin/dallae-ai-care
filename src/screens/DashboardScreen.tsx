@@ -115,10 +115,14 @@ export function DashboardScreen() {
               <IonMascot variant="wink" size={56} />
               {childMood && (
                 <span
-                  className="absolute -bottom-1 -right-1 h-7 w-7 rounded-full bg-card shadow-card flex items-center justify-center text-base ring-2 ring-mint/60"
+                  className="absolute -bottom-1 -right-1 h-8 w-8 rounded-full bg-card shadow-card flex items-center justify-center text-base ring-2 ring-mint/60 overflow-hidden"
                   title={childMood.label}
                 >
-                  {childMood.emoji}
+                  {childMood.image ? (
+                    <img src={childMood.image} alt={childMood.label} className="h-full w-full object-cover" />
+                  ) : (
+                    childMood.emoji
+                  )}
                 </span>
               )}
             </div>
