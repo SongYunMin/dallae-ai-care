@@ -201,6 +201,33 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setInvite,
     toasts,
     toast,
+    checklist,
+    addChecklistItem: (item) =>
+      setChecklist((arr) =>
+        [
+          ...arr,
+          {
+            ...item,
+            id: `cl_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`,
+            completed: false,
+            createdBy: currentUser.id,
+          },
+        ].sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time)),
+      ),
+    toggleChecklistItem: (id) =>
+      setChecklist((arr) =>
+        arr.map((it) =>
+          it.id === id
+            ? {
+                ...it,
+                completed: !it.completed,
+                completedAt: !it.completed ? new Date().toISOString() : undefined,
+                completedBy: !it.completed ? currentUser.name : undefined,
+              }
+            : it,
+        ),
+      ),
+    removeChecklistItem: (id) => setChecklist((arr) => arr.filter((it) => it.id !== id)),
   };
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
