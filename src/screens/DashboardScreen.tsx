@@ -111,8 +111,16 @@ export function DashboardScreen() {
           </div>
 
           <div className="relative flex gap-3 items-center">
-            <div className="rounded-2xl bg-card/80 p-1 shrink-0">
+            <div className="relative rounded-2xl bg-card/80 p-1 shrink-0">
               <IonMascot variant="wink" size={56} />
+              {childMood && (
+                <span
+                  className="absolute -bottom-1 -right-1 h-7 w-7 rounded-full bg-card shadow-card flex items-center justify-center text-base ring-2 ring-mint/60"
+                  title={childMood.label}
+                >
+                  {childMood.emoji}
+                </span>
+              )}
             </div>
             <div className="flex-1">
               <p className="text-sm font-bold leading-snug">
