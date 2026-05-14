@@ -39,7 +39,7 @@ export function MobileShell({
           </button>
         )}
         <main
-          className={`flex-1 min-h-0 ${flushBottom ? "overflow-hidden" : "overflow-y-auto overscroll-contain"} ${hideNav ? "safe-bottom" : flushBottom ? "" : "with-bottom-nav-space"}`}
+          className={`flex-1 min-h-0 ${flushBottom ? "overflow-hidden" : "overflow-y-auto overscroll-contain"} ${hideNav ? "safe-bottom" : "with-bottom-nav-space"}`}
         >
           {children}
         </main>

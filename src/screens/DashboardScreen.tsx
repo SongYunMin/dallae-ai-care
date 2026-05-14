@@ -106,7 +106,7 @@ export function DashboardScreen() {
               <Sparkles size={10} /> AI 돌봄 에이전트
             </span>
             <span className="text-[10px] font-semibold text-mint-foreground">
-              {child.name}이의 기록 분석 중
+              {child.name}이의 최근 기록 분석 중
             </span>
           </div>
 

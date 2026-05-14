@@ -5,9 +5,14 @@ import json
 import os
 from typing import Any
 
+from services.notification_service import generate_agent_notification_candidates
+from services.voice_parser import parse_voice_note_to_record
 
-DALLAE_AGENT_INSTRUCTION = """
-너는 '달래'의 영유아 돌봄 보조 에이전트다.
+
+AgentKind = str
+
+
+COMMON_SAFETY_POLICY = """
 반드시 제공된 아이 정보, 최신 기록, 가족 규칙, 돌봄자 권한 범위 안에서만 답한다.
 의료 진단, 병명 추정, 약물 처방은 하지 않는다.
 위험 신호가 있으면 보호자 또는 의료진 확인을 안내한다.
@@ -15,24 +20,17 @@ DALLAE_AGENT_INSTRUCTION = """
 """
 
 
-class DallaeAgentService:
-    """ADK 세부 실행 방식을 API 라우터에서 숨기는 서비스 계층."""
+class BaseDallaeAgent:
+    """ADK 호출/JSON 파싱/fallback 메타를 역할별 에이전트가 공유한다."""
+
+    agent_kind: AgentKind = "BASE"
+    agent_name = "dallae_base_agent"
+    instruction = COMMON_SAFETY_POLICY
 
     def __init__(self) -> None:
         self.model = os.getenv("ADK_MODEL", "gemini-2.0-flash")
 
-    async def ask(self, user_message: str, context: dict) -> dict:
-        prompt = self._build_prompt(user_message, context)
-        response_text = await self._try_adk(prompt, context)
-        if response_text:
-            try:
-                parsed = json.loads(response_text)
-                return self._apply_safety_guard(self._normalize(parsed), user_message)
-            except Exception:
-                pass
-        return self._apply_safety_guard(self.mock_response(user_message, context), user_message)
-
-    async def _try_adk(self, prompt: str, context: dict) -> str | None:
+    async def _try_adk(self, prompt: str, context: dict, *, user_id: str | None = None) -> str | None:
         """google-adk가 설치되고 GOOGLE_API_KEY가 있을 때만 실제 에이전트를 실행한다."""
         if not os.getenv("GOOGLE_API_KEY"):
             return None
@@ -46,16 +44,17 @@ class DallaeAgentService:
             return None
 
         try:
+            effective_user_id = user_id or context.get("caregiver", {}).get("id") or "anonymous"
             agent = LlmAgent(
-                name="dallae_care_agent",
+                name=self.agent_name,
                 model=self.model,
-                instruction=DALLAE_AGENT_INSTRUCTION,
+                instruction=self.instruction,
             )
             session_service = InMemorySessionService()
-            session_id = f"session_{context['caregiver']['id']}"
+            session_id = f"session_{self.agent_kind.lower()}_{effective_user_id}"
             maybe_session = session_service.create_session(
                 app_name="dallae",
-                user_id=context["caregiver"]["id"],
+                user_id=effective_user_id,
                 session_id=session_id,
             )
             if inspect.isawaitable(maybe_session):
@@ -64,7 +63,7 @@ class DallaeAgentService:
             content = types.Content(role="user", parts=[types.Part(text=prompt)])
             final_text: str | None = None
             async for event in runner.run_async(
-                user_id=context["caregiver"]["id"],
+                user_id=effective_user_id,
                 session_id=session_id,
                 new_message=content,
             ):
@@ -73,6 +72,46 @@ class DallaeAgentService:
             return final_text
         except Exception:
             return None
+
+    def _with_meta(self, payload: dict, *, fallback_used: bool, evidence: list[str] | None = None) -> dict:
+        """내부 추적용 공통 메타를 붙인다. 기존 프론트 타입은 이 필드를 무시한다."""
+        return {
+            **payload,
+            "agentKind": self.agent_kind,
+            "fallbackUsed": fallback_used,
+            "evidence": evidence or [],
+        }
+
+
+class CareChatAgent(BaseDallaeAgent):
+    """최근 돌봄 기록과 가족 규칙을 바탕으로 돌봄자 질문에 답한다."""
+
+    agent_kind = "CARE_CHAT"
+    agent_name = "dallae_care_chat_agent"
+    instruction = f"""
+너는 '달래'의 영유아 돌봄 Q&A 에이전트다.
+{COMMON_SAFETY_POLICY}
+최근 기록, 세션 기록, 가족 규칙을 근거로 1~3문장으로 답한다.
+"""
+
+    async def ask(self, user_message: str, context: dict) -> dict:
+        prompt = self._build_prompt(user_message, context)
+        response_text = await self._try_adk(prompt, context)
+        if response_text:
+            try:
+                parsed = json.loads(response_text)
+                return self._with_meta(
+                    self._apply_safety_guard(self._normalize(parsed), user_message),
+                    fallback_used=False,
+                    evidence=self._evidence_from_context(context),
+                )
+            except Exception:
+                pass
+        return self._with_meta(
+            self._apply_safety_guard(self.mock_response(user_message, context), user_message),
+            fallback_used=True,
+            evidence=self._evidence_from_context(context),
+        )
 
     def _build_prompt(self, user_message: str, context: dict) -> str:
         return "\n".join(
@@ -121,6 +160,13 @@ class DallaeAgentService:
             response["escalation"] = "ASK_PARENT"
         return response
 
+    def _evidence_from_context(self, context: dict) -> list[str]:
+        stats = context.get("recordStats", {}).get("recent24h", {})
+        return [
+            f"최근 24시간 기록 {stats.get('total', 0)}건",
+            f"가족 규칙 {len(context.get('activeRules', []))}개",
+        ]
+
     def mock_response(self, user_message: str, context: dict) -> dict:
         rules = context.get("activeRules", [])
         latest = context.get("latestStatus", {})
@@ -157,7 +203,7 @@ class DallaeAgentService:
                 "escalation": "NONE",
             }
         return {
-            "answer": "현재 아이 상태를 기준으로 먼저 기저귀, 졸림 신호, 마지막 수유 시간을 확인해보세요.",
+            "answer": "최근 기록을 기준으로 먼저 기저귀, 졸림 신호, 마지막 수유 시간을 확인해보세요.",
             "nextActions": ["기저귀 상태를 확인하세요.", "졸려 보이면 조용한 곳에서 안아주세요.", "필요하면 보호자에게 확인하세요."],
             "ruleReminders": rules[:2],
             "recordSuggestions": ["방금 확인한 상태를 기록해두면 다음 보호자가 이어받기 쉽습니다."],
@@ -166,4 +212,101 @@ class DallaeAgentService:
         }
 
 
-agent_service = DallaeAgentService()
+class ProactiveNotificationAgent(BaseDallaeAgent):
+    """최근 기록 누락/반복 패턴/규칙 리마인드 후보를 만든다."""
+
+    agent_kind = "PROACTIVE_NOTIFICATION"
+    agent_name = "dallae_proactive_notification_agent"
+
+    def evaluate(self, context: dict, *, care_session_id: str | None = None) -> list[dict]:
+        candidates = generate_agent_notification_candidates(
+            latest_status=context["latestStatus"],
+            active_rules=context["activeRules"],
+            recent_records=context["recentRecords"],
+            care_session_id=care_session_id,
+        )
+        for candidate in candidates:
+            candidate["agentKind"] = self.agent_kind
+            candidate["fallbackUsed"] = True
+            candidate.setdefault("evidence", "최근 기록과 가족 규칙 기반")
+        return candidates
+
+
+class RecordParserAgent(BaseDallaeAgent):
+    """음성/텍스트 한 문장을 안전한 돌봄 기록 타입으로 변환한다."""
+
+    agent_kind = "RECORD_PARSER"
+    agent_name = "dallae_record_parser_agent"
+
+    def parse(self, text: str) -> dict:
+        parsed = parse_voice_note_to_record(text)
+        return self._with_meta(
+            parsed,
+            fallback_used=True,
+            evidence=[f"입력 텍스트: {text[:40]}"],
+        )
+
+
+class ThankYouMessageAgent(BaseDallaeAgent):
+    """세션 기록 요약을 바탕으로 돌봄자에게 보낼 감사 메시지를 작성한다."""
+
+    agent_kind = "THANK_YOU_MESSAGE"
+    agent_name = "dallae_thank_you_message_agent"
+    instruction = f"""
+너는 부모를 대신해 돌봄자에게 감사 메시지를 작성하는 에이전트다.
+{COMMON_SAFETY_POLICY}
+이번 돌봄 세션 기록을 근거로 따뜻하지만 과장하지 않는 한국어 메시지를 작성한다.
+"""
+
+    async def compose(self, payload: dict, context: dict) -> dict:
+        prompt = self._build_prompt(payload, context)
+        response_text = await self._try_adk(prompt, context, user_id=payload.get("caregiverId"))
+        if response_text:
+            try:
+                parsed = json.loads(response_text)
+                message = str(parsed.get("message") or "").strip()
+                if message:
+                    return self._with_meta({"message": message}, fallback_used=False, evidence=self._evidence_from_context(context))
+            except Exception:
+                pass
+        return self._with_meta(
+            {"message": self.fallback_message(payload, context)},
+            fallback_used=True,
+            evidence=self._evidence_from_context(context),
+        )
+
+    def _build_prompt(self, payload: dict, context: dict) -> str:
+        return "\n".join(
+            [
+                "[감사 메시지 입력]",
+                json.dumps(payload, ensure_ascii=False, indent=2),
+                "",
+                "[기록 컨텍스트]",
+                json.dumps(context, ensure_ascii=False, indent=2),
+                "",
+                "[반환 형식]",
+                json.dumps({"message": "돌봄자에게 보낼 1~2문장 한국어 감사 메시지"}, ensure_ascii=False),
+            ]
+        )
+
+    def _evidence_from_context(self, context: dict) -> list[str]:
+        session_stats = context.get("recordStats", {}).get("session", {})
+        return [f"이번 돌봄 기록 {session_stats.get('total', 0)}건"]
+
+    def fallback_message(self, payload: dict, context: dict) -> str:
+        caregiver_name = payload.get("caregiverName") or "돌봄자"
+        child_name = payload.get("childName") or context.get("child", {}).get("name") or "아이"
+        duration_label = payload.get("durationLabel") or "오늘"
+        stats = context.get("recordStats", {}).get("session", {})
+        total = stats.get("total", 0)
+        record_phrase = f" 기록 {total}건까지 꼼꼼히 남겨주셔서" if total else ""
+        return f"{caregiver_name}님, {duration_label} 동안 {child_name}를 돌봐주시고{record_phrase} 정말 고마워요. 덕분에 안심하고 이어받을 수 있어요."
+
+
+# 이전 이름을 유지해 기존 테스트와 호출부가 깨지지 않게 한다.
+DallaeAgentService = CareChatAgent
+
+care_chat_agent = CareChatAgent()
+notification_agent = ProactiveNotificationAgent()
+record_parser_agent = RecordParserAgent()
+thank_you_message_agent = ThankYouMessageAgent()

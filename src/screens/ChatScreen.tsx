@@ -125,7 +125,7 @@ export function ChatScreen() {
           <div>
             <h1 className="text-base font-bold">아이온 AI 돌봄 챗봇</h1>
             <p className="text-[11px] text-muted-foreground">
-              {child.name}이의 모든 기록·규칙·감정을 보고 답해요
+              {child.name}이의 최근 기록과 가족 규칙을 보고 답해요
             </p>
           </div>
         </div>
@@ -153,7 +153,7 @@ export function ChatScreen() {
                 <div>
                   <p className="text-xs font-bold">안녕하세요! {currentUser.name}님,</p>
                   <p className="text-[11px] text-foreground/75 mt-0.5 leading-relaxed">
-                    {child.name}이의 기록과 가족 규칙을 모두 알고 있어요. 무엇이든 자유롭게
+                    {child.name}이의 최근 기록과 가족 규칙을 보고 있어요. 무엇이든 자유롭게
                     물어보세요.
                   </p>
                 </div>

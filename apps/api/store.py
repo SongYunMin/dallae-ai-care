@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import sqlite3
 from datetime import datetime, timezone
@@ -14,18 +15,17 @@ def now_iso() -> str:
 class DallaeStore:
     """해커톤 MVP용 저장소.
 
-    런타임은 빠른 구현을 위해 메모리 dict를 사용하고, SQLite 파일과 기본 테이블은
-    함께 초기화해 다음 단계에서 영속 저장소로 옮기기 쉽게 둔다.
+    가족/세션 등 MVP 상태는 아직 메모리에 두지만, 돌봄 기록은 모든 에이전트의
+    공통 근거가 되므로 SQLite를 source of truth로 사용한다.
     """
 
-    def __init__(self) -> None:
-        self.db_path = Path(os.getenv("DATABASE_URL", "sqlite:///./dallae.db").replace("sqlite:///", ""))
+    def __init__(self, database_url: str | None = None) -> None:
+        self.db_path = Path((database_url or os.getenv("DATABASE_URL", "sqlite:///./dallae.db")).replace("sqlite:///", ""))
         self._init_sqlite()
         self.families: dict[str, dict] = {}
         self.children: dict[str, dict] = {}
         self.members: dict[str, dict] = {}
         self.rules: dict[str, list[str]] = {}
-        self.records: list[dict] = []
         self.invites: dict[str, dict] = {}
         self.sessions: dict[str, dict] = {}
         self.voice_notes: list[dict] = []
@@ -43,7 +43,40 @@ class DallaeStore:
                 create table if not exists care_records (id text primary key, family_id text not null, child_id text not null, payload text not null);
                 create table if not exists care_sessions (id text primary key, family_id text not null, child_id text not null, payload text not null);
                 create table if not exists agent_notifications (id text primary key, family_id text not null, child_id text not null, payload text not null);
+                create index if not exists idx_care_records_child_id on care_records(child_id);
                 """
+            )
+
+    def _insert_record_if_missing(self, record: dict) -> None:
+        """같은 기록 ID가 없을 때만 SQLite에 JSON payload를 저장한다."""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                """
+                insert or ignore into care_records (id, family_id, child_id, payload)
+                values (?, ?, ?, ?)
+                """,
+                (
+                    record["id"],
+                    record["familyId"],
+                    record["childId"],
+                    json.dumps(record, ensure_ascii=False),
+                ),
+            )
+
+    def _insert_record(self, record: dict) -> None:
+        """새 돌봄 기록을 SQLite에 저장해 모든 에이전트가 같은 근거를 보게 한다."""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                """
+                insert into care_records (id, family_id, child_id, payload)
+                values (?, ?, ?, ?)
+                """,
+                (
+                    record["id"],
+                    record["familyId"],
+                    record["childId"],
+                    json.dumps(record, ensure_ascii=False),
+                ),
             )
 
     def seed(self) -> None:
@@ -74,7 +107,7 @@ class DallaeStore:
             "role": "CAREGIVER_EDITOR",
         }
         self.rules["child_1"] = ["영상보다 장난감으로 달래기", "자기 전에는 조명을 어둡게 해요"]
-        self.records = [
+        self._insert_record_if_missing(
             {
                 "id": "record_seed_1",
                 "familyId": "family_1",
@@ -87,7 +120,7 @@ class DallaeStore:
                 "source": "MANUAL",
                 "memo": "분유 160ml",
             }
-        ]
+        )
         self.notifications["noti_seed_1"] = {
             "id": "noti_seed_1",
             "familyId": "family_1",
@@ -162,7 +195,13 @@ class DallaeStore:
         return {"userId": user_id, "familyId": invite["familyId"], "childId": "child_1", "role": invite["role"], "name": payload["name"]}
 
     def child_records(self, child_id: str) -> list[dict]:
-        return [record for record in self.records if record["childId"] == child_id]
+        with sqlite3.connect(self.db_path) as conn:
+            rows = conn.execute(
+                "select payload from care_records where child_id = ?",
+                (child_id,),
+            ).fetchall()
+        records = [json.loads(row[0]) for row in rows]
+        return sorted(records, key=lambda record: record["recordedAt"], reverse=True)
 
     def create_record(self, payload: dict) -> dict:
         record = {
@@ -180,7 +219,7 @@ class DallaeStore:
             "memo": payload.get("memo"),
             "photoUrl": payload.get("photoUrl"),
         }
-        self.records.insert(0, record)
+        self._insert_record(record)
         return record
 
     def start_session(self, payload: dict) -> dict:

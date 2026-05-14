@@ -96,12 +96,12 @@ export function NotificationsScreen() {
             <p className="text-[10px] text-muted-foreground">새 알림</p>
           </div>
           <div className="flex-1 rounded-xl bg-card/80 backdrop-blur p-2 text-center">
-            <p className="text-base font-bold text-mint-foreground">기록 7일</p>
+            <p className="text-base font-bold text-mint-foreground">최근 24시간</p>
             <p className="text-[10px] text-muted-foreground">분석 기간</p>
           </div>
           <div className="flex-1 rounded-xl bg-card/80 backdrop-blur p-2 text-center">
-            <p className="text-base font-bold text-sky-foreground">5분</p>
-            <p className="text-[10px] text-muted-foreground">분석 주기</p>
+            <p className="text-base font-bold text-sky-foreground">기록 변경</p>
+            <p className="text-[10px] text-muted-foreground">분석 시점</p>
           </div>
         </div>
       </header>

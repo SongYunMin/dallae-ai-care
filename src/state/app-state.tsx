@@ -279,6 +279,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setPayload(null);
       setParentThankYouMessage('');
       setScreen('splash');
+      // 라우터 URL까지 초기 화면으로 돌려야 pathname 동기화가 다시 현재 화면을 복구하지 않는다.
+      routeNavigate({ to: pathForScreen('splash') });
+      if (typeof window !== 'undefined') window.scrollTo(0, 0);
       toast('로그아웃했어요');
     },
     records,

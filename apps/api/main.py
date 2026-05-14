@@ -8,13 +8,11 @@ from pydantic import BaseModel, Field
 # 로컬 개발에서는 apps/api/.env 파일을 읽어 ADK 키와 모델 설정을 주입한다.
 load_dotenv()
 
-from agents.dallae_agent import agent_service
+from agents.dallae_agent import care_chat_agent, notification_agent, record_parser_agent, thank_you_message_agent
 from services.context_builder import build_agent_context
-from services.notification_service import generate_agent_notification_candidates
 from services.permission_service import require_care_session, require_record_write
 from services.rules import merge_default_and_parent_rules
-from services.status_service import format_latest_status, get_latest_status
-from services.voice_parser import parse_voice_note_to_record
+from services.status_service import format_latest_status
 from store import now_iso, store
 
 app = FastAPI(title="Dallae MVP API", version="0.1.0")
@@ -103,6 +101,18 @@ class NotificationEvaluateIn(BaseModel):
 
 class NotificationStatusIn(BaseModel):
     status: str = Field(pattern="^(UNREAD|ACKED|DISMISSED)$")
+
+
+class ThankYouIn(BaseModel):
+    caregiverName: str
+    childName: str
+    durationLabel: str
+    counts: dict = {}
+    tone: str = "WARM"
+    familyId: str = "family_1"
+    childId: str = "child_1"
+    caregiverId: str | None = None
+    careSessionId: str | None = None
 
 
 class RuleCreateIn(BaseModel):
@@ -206,7 +216,14 @@ def end_care_session(session_id: str, payload: CareSessionEndIn) -> dict:
 def create_voice_note(session_id: str, payload: VoiceNoteIn) -> dict:
     if session_id not in store.sessions:
         raise HTTPException(status_code=404, detail="돌봄 세션을 찾을 수 없습니다.")
-    parsed = parse_voice_note_to_record(payload.text)
+    member = store.members.get(payload.recordedBy)
+    if not member:
+        raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
+    try:
+        require_record_write(member)
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    parsed = record_parser_agent.parse(payload.text)
     voice_id = f"voice_{len(store.voice_notes) + 1}"
     store.voice_notes.append(
         {
@@ -217,7 +234,22 @@ def create_voice_note(session_id: str, payload: VoiceNoteIn) -> dict:
             "recordedAt": now_iso(),
         }
     )
-    return {"voiceNoteId": voice_id, "parsedRecord": parsed}
+    session = store.sessions[session_id]
+    # 음성 입력은 파싱 결과만 보여주지 않고 실제 돌봄 기록에도 남겨 다음 에이전트 근거로 사용한다.
+    created_record = store.create_record(
+        {
+            "familyId": session["familyId"],
+            "childId": session["childId"],
+            "careSessionId": session_id,
+            "type": parsed["type"],
+            "amountMl": parsed.get("amountMl"),
+            "recordedBy": payload.recordedBy,
+            "recordedByName": member.get("name"),
+            "source": "VOICE",
+            "memo": parsed.get("memo") or payload.text,
+        }
+    )
+    return {"voiceNoteId": voice_id, "parsedRecord": parsed, "createdRecord": created_record}
 
 
 @app.post("/api/chat")
@@ -230,7 +262,7 @@ async def ask_chat(payload: ChatIn) -> dict:
         caregiver_id=payload.caregiverId,
         care_session_id=payload.careSessionId,
     )
-    return await agent_service.ask(payload.message, context)
+    return await care_chat_agent.ask(payload.message, context)
 
 
 @app.post("/api/agent-notifications/evaluate")
@@ -241,13 +273,7 @@ def evaluate_agent_notifications(payload: NotificationEvaluateIn) -> dict:
         caregiver_id=payload.caregiverId,
         care_session_id=payload.careSessionId,
     )
-    latest = get_latest_status(context["recentRecords"])
-    candidates = generate_agent_notification_candidates(
-        latest_status=latest,
-        active_rules=context["activeRules"],
-        recent_records=context["recentRecords"],
-        care_session_id=payload.careSessionId,
-    )
+    candidates = notification_agent.evaluate(context, care_session_id=payload.careSessionId)
     created = []
     existing_keys = {(n["type"], n["title"]) for n in store.notifications.values()}
     for candidate in candidates:
@@ -269,6 +295,23 @@ def update_agent_notification(notification_id: str, payload: NotificationStatusI
         raise HTTPException(status_code=404, detail="알림을 찾을 수 없습니다.")
     store.notifications[notification_id]["status"] = payload.status
     return {"id": notification_id, "status": payload.status}
+
+
+@app.post("/api/thankyou")
+async def create_thank_you_message(payload: ThankYouIn) -> dict:
+    session = store.sessions.get(payload.careSessionId) if payload.careSessionId else None
+    caregiver_id = payload.caregiverId or (session or {}).get("caregiverId") or "user_parent_1"
+    family_id = (session or {}).get("familyId") or payload.familyId
+    child_id = (session or {}).get("childId") or payload.childId
+    if caregiver_id not in store.members:
+        raise HTTPException(status_code=404, detail="돌봄자를 찾을 수 없습니다.")
+    context = build_agent_context(
+        family_id=family_id,
+        child_id=child_id,
+        caregiver_id=caregiver_id,
+        care_session_id=payload.careSessionId,
+    )
+    return await thank_you_message_agent.compose(payload.model_dump(), context)
 
 
 @app.get("/api/rules")

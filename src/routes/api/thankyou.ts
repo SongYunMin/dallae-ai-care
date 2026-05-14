@@ -16,7 +16,27 @@ const BodySchema = z.object({
     medicine: z.number().int().min(0).max(99),
   }),
   tone: ToneEnum.optional().default("WARM"),
+  familyId: z.string().optional().default("family_1"),
+  childId: z.string().optional().default("child_1"),
+  caregiverId: z.string().optional(),
+  careSessionId: z.string().optional(),
 });
+
+const API_BASE =
+  (process.env.VITE_API_BASE_URL ?? process.env.API_BASE_URL ?? "http://localhost:8000").replace(/\/$/, "");
+
+async function callDallaeApi<T>(path: string, body: unknown): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`Dallae API ${path} ${res.status}: ${text || res.statusText}`);
+  }
+  return (await res.json()) as T;
+}
 
 export const Route = createFileRoute("/api/thankyou")({
   server: {
@@ -27,6 +47,14 @@ export const Route = createFileRoute("/api/thankyou")({
           parsed = BodySchema.parse(await request.json());
         } catch {
           return new Response("Invalid input", { status: 400 });
+        }
+
+        try {
+          // 감사 메시지도 FastAPI의 기록 DB 기반 에이전트를 먼저 사용한다.
+          const data = await callDallaeApi<{ message: string }>("/api/thankyou", parsed);
+          return Response.json({ message: data.message });
+        } catch {
+          // FastAPI가 꺼진 프론트 단독 데모에서는 기존 ADK/로컬 fallback으로 내려간다.
         }
 
         try {

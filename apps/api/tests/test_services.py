@@ -1,10 +1,12 @@
-from agents.dallae_agent import DallaeAgentService
-from services.context_builder import build_shareable_child_snapshot
+import services.context_builder as context_builder
+from agents.dallae_agent import DallaeAgentService, record_parser_agent
+from services.context_builder import build_agent_context, build_shareable_child_snapshot
 from services.notification_service import generate_agent_notification_candidates
 from services.permission_service import build_permission_scope
 from services.rules import DEFAULT_CARE_RULES, merge_default_and_parent_rules
 from services.status_service import get_latest_status
 from services.voice_parser import parse_voice_note_to_record
+from store import DallaeStore
 
 
 def test_default_rules_are_always_first_and_deduped():
@@ -78,3 +80,73 @@ def test_agent_guard_escalates_fever_reducer_to_parent_check():
     )
 
     assert response["escalation"] == "ASK_PARENT"
+
+
+def test_store_persists_records_to_sqlite(tmp_path):
+    db_url = f"sqlite:///{tmp_path / 'dallae-test.db'}"
+    store = DallaeStore(db_url)
+    created = store.create_record(
+        {
+            "familyId": "family_1",
+            "childId": "child_1",
+            "type": "FEEDING",
+            "amountMl": 180,
+            "recordedBy": "user_parent_1",
+            "recordedByName": "엄마",
+            "source": "MANUAL",
+            "memo": "분유 180ml",
+        }
+    )
+
+    reloaded = DallaeStore(db_url)
+    records = reloaded.child_records("child_1")
+
+    assert any(record["id"] == created["id"] for record in records)
+    assert records[0]["recordedAt"] >= records[-1]["recordedAt"]
+
+
+def test_agent_context_reads_records_from_sqlite(monkeypatch, tmp_path):
+    db_url = f"sqlite:///{tmp_path / 'context-test.db'}"
+    store = DallaeStore(db_url)
+    store.create_record(
+        {
+            "familyId": "family_1",
+            "childId": "child_1",
+            "type": "DIAPER",
+            "recordedBy": "user_parent_1",
+            "recordedByName": "엄마",
+            "source": "MANUAL",
+            "memo": "정상",
+        }
+    )
+    monkeypatch.setattr(context_builder, "store", store)
+
+    context = build_agent_context(
+        family_id="family_1",
+        child_id="child_1",
+        caregiver_id="user_parent_1",
+    )
+
+    assert context["latestStatus"]["diaper"]["memo"] == "정상"
+    assert context["recordStats"]["recent24h"]["total"] >= 1
+
+
+def test_record_parser_output_can_be_saved_as_voice_record(tmp_path):
+    store = DallaeStore(f"sqlite:///{tmp_path / 'voice-test.db'}")
+    parsed = record_parser_agent.parse("지금 분유 160ml 먹였어")
+    created = store.create_record(
+        {
+            "familyId": "family_1",
+            "childId": "child_1",
+            "careSessionId": "session_test",
+            "type": parsed["type"],
+            "amountMl": parsed.get("amountMl"),
+            "recordedBy": "user_parent_1",
+            "recordedByName": "엄마",
+            "source": "VOICE",
+            "memo": parsed["memo"],
+        }
+    )
+
+    assert created["source"] == "VOICE"
+    assert store.child_records("child_1")[0]["amountMl"] == 160

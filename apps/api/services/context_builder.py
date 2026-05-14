@@ -35,6 +35,38 @@ def list_recent_records(child_id: str, hours: int = 24) -> list[dict]:
     ]
 
 
+def list_session_records(child_id: str, care_session_id: str | None) -> list[dict]:
+    """특정 돌봄 세션 안에서 작성된 기록만 시간순 근거로 모은다."""
+    if not care_session_id:
+        return []
+    return [
+        record
+        for record in store.child_records(child_id)
+        if record.get("careSessionId") == care_session_id
+    ]
+
+
+def summarize_records(records: list[dict]) -> dict:
+    """에이전트가 긴 기록 목록 없이도 빈도와 누락을 판단할 수 있게 요약한다."""
+    counts = {
+        "FEEDING": 0,
+        "SLEEP_START": 0,
+        "SLEEP_END": 0,
+        "DIAPER": 0,
+        "MEDICINE": 0,
+        "CRYING": 0,
+        "NOTE": 0,
+    }
+    for record in records:
+        record_type = record.get("type")
+        if record_type in counts:
+            counts[record_type] += 1
+    return {
+        "total": len(records),
+        "countsByType": counts,
+    }
+
+
 def build_agent_context(
     *,
     family_id: str,
@@ -46,6 +78,7 @@ def build_agent_context(
     child = store.children[child_id]
     caregiver = store.members[caregiver_id]
     recent_records = list_recent_records(child_id, hours=24)
+    session_records = list_session_records(child_id, care_session_id)
     latest_status = get_latest_status(recent_records)
     active_rules = merge_default_and_parent_rules(store.rules.get(child_id, []))
     permission_scope = build_permission_scope(caregiver)
@@ -65,6 +98,11 @@ def build_agent_context(
         "activeCareSession": active_session,
         "latestStatus": latest_status,
         "recentRecords": recent_records,
+        "sessionRecords": session_records,
+        "recordStats": {
+            "recent24h": summarize_records(recent_records),
+            "session": summarize_records(session_records),
+        },
         "shareableChildFacts": build_shareable_child_snapshot(child, permission_scope),
         "activeRules": active_rules,
         "notificationCandidates": notification_candidates,

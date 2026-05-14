@@ -346,6 +346,10 @@ export function CareModeScreen() {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
+                      familyId: ended.familyId,
+                      childId: ended.childId,
+                      caregiverId: ended.caregiverId,
+                      careSessionId: ended.id,
                       caregiverName: ended.caregiverName,
                       childName: child.name,
                       durationLabel,
