@@ -1,22 +1,31 @@
-import { type ReactNode } from 'react';
-import { ChevronLeft } from 'lucide-react';
-import { useApp, type Screen } from '@/state/app-state';
-import { BottomNav } from './BottomNav';
+import { type ReactNode } from "react";
+import { ChevronLeft } from "lucide-react";
+import { useApp, type Screen } from "@/state/app-state";
+import { BottomNav } from "./BottomNav";
 
-const TAB_SCREENS: Screen[] = ['dashboard', 'records', 'careMode', 'chat', 'family'];
+const TAB_SCREENS: Screen[] = ["dashboard", "records", "careMode", "chat", "family"];
 
-export function MobileShell({ children, hideNav = false }: { children: ReactNode; hideNav?: boolean }) {
+export function MobileShell({
+  children,
+  hideNav = false,
+}: {
+  children: ReactNode;
+  hideNav?: boolean;
+}) {
   const { toasts, screen, canGoBack, goBack, navigate } = useApp();
   const isTab = TAB_SCREENS.includes(screen);
-  const showBack = !hideNav && !isTab && screen !== 'splash' && screen !== 'onboarding';
+  const showBack = !hideNav && !isTab && screen !== "splash" && screen !== "onboarding";
 
   const onBack = () => {
     if (canGoBack) goBack();
-    else navigate('dashboard');
+    else navigate("dashboard");
   };
 
   return (
-    <div className="h-dvh w-full flex justify-center overflow-hidden" style={{ background: 'oklch(0.92 0.025 80)' }}>
+    <div
+      className="h-dvh w-full flex justify-center overflow-hidden"
+      style={{ background: "oklch(0.92 0.025 80)" }}
+    >
       <div className="relative mx-auto w-full max-w-[430px] h-dvh overflow-hidden bg-background shadow-frame flex flex-col">
         {showBack && (
           <button
@@ -27,7 +36,9 @@ export function MobileShell({ children, hideNav = false }: { children: ReactNode
             <ChevronLeft size={22} className="text-foreground" />
           </button>
         )}
-        <main className={`flex-1 min-h-0 overflow-y-auto overscroll-contain ${hideNav ? 'safe-bottom' : 'with-bottom-nav-space'}`}>
+        <main
+          className={`flex-1 min-h-0 overflow-y-auto overscroll-contain ${hideNav ? "safe-bottom" : "with-bottom-nav-space"}`}
+        >
           {children}
         </main>
         {!hideNav && <BottomNav />}
