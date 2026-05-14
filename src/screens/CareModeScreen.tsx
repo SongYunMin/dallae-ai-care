@@ -1,11 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useApp } from '@/state/app-state';
 import { IonMascot } from '@/components/IonMascot';
 import { DEFAULT_RULES, QUICK_CAREGIVER_QUESTIONS } from '@/lib/mock-data';
 import { createCareRecord, endCareSession, parseTextToRecord, startCareSession } from '@/lib/api';
-import { formatDuration, formatTime } from '@/lib/date';
-import type { CareRecordType } from '@/lib/types';
-import { Mic, Send, Sparkles, MessageCircle, TrendingUp, ClipboardList } from 'lucide-react';
+import { formatDuration, formatTime, formatRelative } from '@/lib/date';
+import { itemDateTime, todayKey, KIND_META, formatItemTime } from '@/lib/checklist';
+import type { CareRecord, CareRecordType, ChecklistItem } from '@/lib/types';
+import { Mic, Send, Sparkles, MessageCircle, TrendingUp, ClipboardList, ChevronDown } from 'lucide-react';
 
 const quick: { type: CareRecordType; label: string }[] = [
   { type: 'FEEDING', label: '분유 먹였어요' },
@@ -17,8 +18,7 @@ const quick: { type: CareRecordType; label: string }[] = [
 ];
 
 export function CareModeScreen() {
-  const { session, startSession, endSession, addRecord, currentUser, toast, navigate, child, records } = useApp();
-  void records;
+  const { session, startSession, endSession, addRecord, currentUser, toast, navigate, child, records, checklist } = useApp();
   const [text, setText] = useState('');
   const [tick, setTick] = useState(0);
 
@@ -116,15 +116,12 @@ export function CareModeScreen() {
       </header>
 
       <div className="px-4 pt-4 space-y-3">
-        <div className="rounded-3xl bg-card shadow-card p-4">
-          <p className="font-bold text-sm">아이 현재 상태</p>
-          <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
-            <div className="rounded-xl bg-cream p-2">마지막 수유<br /><span className="font-bold text-sm">오후 2:20 / 160ml</span></div>
-            <div className="rounded-xl bg-sky/40 p-2">마지막 낮잠<br /><span className="font-bold text-sm">오후 12:00 종료</span></div>
-            <div className="rounded-xl bg-mint/40 p-2">기저귀<br /><span className="font-bold text-sm">정상</span></div>
-            <div className="rounded-xl bg-coral/30 p-2">약<br /><span className="font-bold text-sm">기록 없음</span></div>
-          </div>
-        </div>
+        <BabyStatusCard
+          caregiverName={session.caregiverName}
+          childName={child.name}
+          records={records}
+          checklist={checklist}
+        />
 
         <div className="rounded-3xl bg-mint/30 border border-mint/50 p-4">
           <p className="text-[11px] font-bold tracking-wider text-mint-foreground">꼭 지킬 가족 규칙</p>
@@ -270,6 +267,150 @@ function AgentHelperPanel() {
         아이온에게 직접 물어보기
         <Send size={14} />
       </button>
+    </div>
+  );
+}
+
+function nextScheduleMessage(
+  caregiverName: string,
+  next: ChecklistItem | null,
+): { headline: string; sub: string } {
+  if (!next) {
+    return {
+      headline: `${caregiverName}! 오늘 남은 일정은 없어요 🎉`,
+      sub: '편안하게 저랑 놀아주세요!',
+    };
+  }
+  const diffMin = Math.round((itemDateTime(next).getTime() - Date.now()) / 60000);
+  const meta = KIND_META[next.kind];
+  const verbByKind: Record<string, string> = {
+    FEEDING: '저 밥 주세요',
+    DIAPER: '저 기저귀 갈아주세요',
+    SLEEP: '저 재워주세요',
+    MEDICINE: '저 약 먹여주세요',
+    BATH: '저 목욕시켜 주세요',
+    OTHER: '저 챙겨주세요',
+  };
+  const verb = verbByKind[next.kind] ?? '저 챙겨주세요';
+  let when: string;
+  if (diffMin <= 0) when = '지금';
+  else if (diffMin < 60) when = `${diffMin}분 뒤에`;
+  else {
+    const h = Math.floor(diffMin / 60);
+    const m = diffMin % 60;
+    when = m === 0 ? `${h}시간 뒤에` : `${h}시간 ${m}분 뒤에`;
+  }
+  return {
+    headline: `${caregiverName}! ${when} ${verb} ${meta.emoji}`,
+    sub: `${formatItemTime(next.time)} · ${next.label}`,
+  };
+}
+
+function lastByType(records: CareRecord[], type: CareRecordType): CareRecord | undefined {
+  return [...records].filter((r) => r.type === type).sort((a, b) => b.at.localeCompare(a.at))[0];
+}
+
+function BabyStatusCard({
+  caregiverName,
+  childName,
+  records,
+  checklist,
+}: {
+  caregiverName: string;
+  childName: string;
+  records: CareRecord[];
+  checklist: ChecklistItem[];
+}) {
+  const [open, setOpen] = useState(false);
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setTick((x) => x + 1), 60000);
+    return () => clearInterval(t);
+  }, []);
+
+  const next = useMemo(() => {
+    const today = todayKey();
+    const now = Date.now();
+    return (
+      checklist
+        .filter((it) => !it.completed && it.date >= today)
+        .filter((it) => itemDateTime(it).getTime() >= now - 5 * 60000)
+        .sort((a, b) => itemDateTime(a).getTime() - itemDateTime(b).getTime())[0] ?? null
+    );
+  }, [checklist]);
+
+  const msg = nextScheduleMessage(caregiverName, next);
+
+  const lastFeed = lastByType(records, 'FEEDING');
+  const lastSleepEnd = lastByType(records, 'SLEEP_END');
+  const lastSleepStart = lastByType(records, 'SLEEP_START');
+  const lastSleep = lastSleepEnd ?? lastSleepStart;
+  const lastDiaper = lastByType(records, 'DIAPER');
+  const lastMed = lastByType(records, 'MEDICINE');
+
+  return (
+    <div className="rounded-3xl bg-card shadow-card p-4">
+      <div className="rounded-2xl gradient-mint p-3">
+        <p className="text-[10px] font-bold tracking-wider text-mint-foreground">
+          {childName}이가 부탁해요
+        </p>
+        <p className="mt-1 text-base font-bold leading-snug">{msg.headline}</p>
+        <p className="mt-0.5 text-[11px] text-foreground/70">{msg.sub}</p>
+      </div>
+
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="mt-3 w-full flex items-center justify-between text-xs font-semibold text-foreground/80 active:scale-[0.99] transition-transform"
+      >
+        <span>마지막 상태들 보기</span>
+        <ChevronDown
+          size={16}
+          className={`transition-transform ${open ? 'rotate-180' : ''}`}
+        />
+      </button>
+
+      {open && (
+        <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
+          <div className="rounded-xl bg-cream p-2">
+            마지막 수유<br />
+            <span className="font-bold text-sm">
+              {lastFeed
+                ? `${formatTime(lastFeed.at)}${lastFeed.amountMl ? ` / ${lastFeed.amountMl}ml` : ''}`
+                : '기록 없음'}
+            </span>
+            {lastFeed && (
+              <span className="block text-[10px] text-muted-foreground mt-0.5">
+                {formatRelative(lastFeed.at)}
+              </span>
+            )}
+          </div>
+          <div className="rounded-xl bg-sky/40 p-2">
+            마지막 낮잠<br />
+            <span className="font-bold text-sm">
+              {lastSleep
+                ? `${formatTime(lastSleep.at)} ${lastSleep.type === 'SLEEP_END' ? '종료' : '시작'}`
+                : '기록 없음'}
+            </span>
+          </div>
+          <div className="rounded-xl bg-mint/40 p-2">
+            기저귀<br />
+            <span className="font-bold text-sm">
+              {lastDiaper ? formatTime(lastDiaper.at) : '기록 없음'}
+            </span>
+            {lastDiaper && (
+              <span className="block text-[10px] text-muted-foreground mt-0.5">
+                {formatRelative(lastDiaper.at)}
+              </span>
+            )}
+          </div>
+          <div className="rounded-xl bg-coral/30 p-2">
+            약<br />
+            <span className="font-bold text-sm">
+              {lastMed ? formatTime(lastMed.at) : '기록 없음'}
+            </span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
