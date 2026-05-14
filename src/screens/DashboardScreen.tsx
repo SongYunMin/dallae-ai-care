@@ -52,18 +52,24 @@ export function DashboardScreen() {
     0,
     Math.floor((Date.now() - new Date(child.birthDate).getTime()) / (1000 * 60 * 60 * 24)),
   );
-  const lastRecord = [...records].sort(
+  const sortedRecords = [...records].sort(
     (a, b) => new Date(b.at).getTime() - new Date(a.at).getTime(),
-  )[0];
-  const RECORD_LABEL: Record<string, string> = {
-    FEEDING: "수유",
-    DIAPER: "기저귀",
-    SLEEP_START: "낮잠 시작",
-    SLEEP_END: "낮잠 종료",
-    MEDICINE: "약 복용",
-    CRYING: "울음",
-    BATH: "목욕",
-    PLAY: "놀이",
+  );
+  const lastByType = (types: string[]) => sortedRecords.find((r) => types.includes(r.type));
+  const lastFeed = lastByType(["FEEDING"]);
+  const lastSleep = lastByType(["SLEEP_START", "SLEEP_END"]);
+  const lastDiaper = lastByType(["DIAPER"]);
+  const lastMedicine = lastByType(["MEDICINE"]);
+
+  const timeAgo = (iso?: string) => {
+    if (!iso) return "-";
+    const diffMs = Date.now() - new Date(iso).getTime();
+    const mins = Math.floor(diffMs / 60000);
+    if (mins < 1) return "방금 전";
+    if (mins < 60) return `${mins}분 전`;
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return `${hours}시간 전`;
+    return `${Math.floor(hours / 24)}일 전`;
   };
 
   return (
@@ -161,32 +167,58 @@ export function DashboardScreen() {
           </div>
         </div>
 
-        {/* === Child latest status (compact) === */}
+        {/* === Child latest status (4 tiles) === */}
         <div className="rounded-3xl bg-card shadow-card p-4">
-          <div className="flex items-center gap-2">
-            <div className="rounded-xl bg-mint/40 p-0.5">
-              <IonMascot variant="basic" size={32} />
+          <div className="grid grid-cols-2 gap-2">
+            <StatusTile
+              label="마지막 수유"
+              value={lastFeed?.amountMl ? `${lastFeed.amountMl}ml` : lastFeed ? "수유" : "기록 없음"}
+              sub={timeAgo(lastFeed?.at)}
+              tone="bg-cream"
+            />
+            <StatusTile
+              label="마지막 낮잠"
+              value={lastSleep ? "잠" : "기록 없음"}
+              sub={timeAgo(lastSleep?.at)}
+              tone="bg-sky/40"
+            />
+            <StatusTile
+              label="기저귀"
+              value={lastDiaper ? "정상" : "기록 없음"}
+              sub={timeAgo(lastDiaper?.at)}
+              tone="bg-mint/50"
+            />
+            <StatusTile
+              label="약 복용"
+              value={lastMedicine ? "복용" : "기록 없음"}
+              sub={timeAgo(lastMedicine?.at)}
+              tone="bg-coral/40"
+            />
+          </div>
+        </div>
+
+        {/* Today summary */}
+        <div className="rounded-3xl bg-card shadow-card p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <Bell size={16} className="text-primary" />
+            <h2 className="font-bold text-sm">오늘 한눈에</h2>
+          </div>
+          <div className="grid grid-cols-2 text-center divide-x divide-border">
+            <div>
+              <p className="text-xl font-bold text-sky-foreground">{session ? "ON" : "대기"}</p>
+              <p className="text-[11px] text-muted-foreground">돌봄 세션</p>
             </div>
-            <div className="flex-1">
-              <p className="text-[11px] font-bold tracking-wider text-foreground/60">
-                마지막 상태
+            <button
+              onClick={() => navigate("checklist")}
+              className="active:scale-95 transition-transform"
+            >
+              <p className="text-xl font-bold text-mint-foreground">
+                {todayItems.length === 0 ? "-" : `${doneCount}/${todayItems.length}`}
               </p>
-              <p className="font-bold text-sm leading-snug">
-                {lastRecord
-                  ? `${RECORD_LABEL[lastRecord.type] ?? lastRecord.type}${
-                      lastRecord.amountMl ? ` ${lastRecord.amountMl}ml` : ""
-                    } · ${new Date(lastRecord.at).toLocaleTimeString("ko-KR", {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}`
-                  : "아직 기록이 없어요"}
+              <p className="text-[11px] text-muted-foreground flex items-center justify-center gap-0.5">
+                오늘의 돌봄 체크리스트 <ChevronRight size={10} />
               </p>
-              {lastRecord?.recordedBy && (
-                <p className="text-[11px] text-muted-foreground mt-0.5">
-                  {lastRecord.recordedBy}님이 기록
-                </p>
-              )}
-            </div>
+            </button>
           </div>
         </div>
 
@@ -217,32 +249,27 @@ export function DashboardScreen() {
           </div>
         </div>
 
-        {/* Today summary */}
-        <div className="rounded-3xl bg-card shadow-card p-4">
-          <div className="flex items-center gap-2 mb-2">
-            <Bell size={16} className="text-primary" />
-            <h2 className="font-bold text-sm">오늘 한눈에</h2>
-          </div>
-          <div className="grid grid-cols-2 text-center divide-x divide-border">
-            <div>
-              <p className="text-xl font-bold text-sky-foreground">{session ? "ON" : "대기"}</p>
-              <p className="text-[11px] text-muted-foreground">돌봄 세션</p>
-            </div>
-            <button
-              onClick={() => navigate("checklist")}
-              className="active:scale-95 transition-transform"
-            >
-              <p className="text-xl font-bold text-mint-foreground">
-                {todayItems.length === 0 ? "-" : `${doneCount}/${todayItems.length}`}
-              </p>
-              <p className="text-[11px] text-muted-foreground flex items-center justify-center gap-0.5">
-                오늘의 돌봄 체크리스트 <ChevronRight size={10} />
-              </p>
-            </button>
-          </div>
-        </div>
-
       </div>
+    </div>
+  );
+}
+
+function StatusTile({
+  label,
+  value,
+  sub,
+  tone,
+}: {
+  label: string;
+  value: string;
+  sub: string;
+  tone: string;
+}) {
+  return (
+    <div className={`rounded-2xl p-3 ${tone}`}>
+      <p className="text-[11px] font-medium text-foreground/70">{label}</p>
+      <p className="font-bold text-base mt-0.5 leading-snug">{value}</p>
+      <p className="text-[11px] text-foreground/60 mt-1">{sub}</p>
     </div>
   );
 }
