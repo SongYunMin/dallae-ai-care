@@ -172,25 +172,36 @@ export function CareModeScreen() {
         <AgentHelperPanel />
 
 
-        <button
-          onClick={async () => {
-            if (typeof window !== 'undefined' && !window.confirm('돌봄을 종료할까요?')) return;
-            const ended = endSession();
-            if (!ended) return;
-            const counts = {
-              feeding: records.filter((r) => r.type === 'FEEDING').length,
-              diaper: records.filter((r) => r.type === 'DIAPER').length,
-              sleep: records.filter((r) => r.type.startsWith('SLEEP')).length,
-              medicine: records.filter((r) => r.type === 'MEDICINE').length,
-              voiceNotes: records.filter((r) => r.source === 'VOICE').length,
-            };
-            await endCareSession(ended.id, ended.startedAt, counts);
-            navigate('thankYouReport');
-          }}
-          className="w-full h-14 rounded-2xl bg-coral text-coral-foreground font-semibold shadow-soft"
-        >
-          돌봄 종료하고 리포트 쓰기
-        </button>
+        {session.caregiverId === currentUser.id ? (
+          <button
+            onClick={async () => {
+              if (typeof window !== 'undefined' && !window.confirm('돌봄을 종료할까요?')) return;
+              const ended = endSession();
+              if (!ended) return;
+              const counts = {
+                feeding: records.filter((r) => r.type === 'FEEDING').length,
+                diaper: records.filter((r) => r.type === 'DIAPER').length,
+                sleep: records.filter((r) => r.type.startsWith('SLEEP')).length,
+                medicine: records.filter((r) => r.type === 'MEDICINE').length,
+                voiceNotes: records.filter((r) => r.source === 'VOICE').length,
+              };
+              await endCareSession(ended.id, ended.startedAt, counts);
+              navigate('thankYouReport');
+            }}
+            className="w-full h-14 rounded-2xl bg-coral text-coral-foreground font-semibold shadow-soft"
+          >
+            돌봄 종료하고 리포트 쓰기
+          </button>
+        ) : (
+          <div className="w-full rounded-2xl bg-muted/60 border border-border p-4 text-center">
+            <p className="text-sm font-semibold text-foreground">
+              돌봄 종료는 {session.caregiverName}님만 할 수 있어요
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">
+              지금 돌보고 있는 분이 직접 종료하고 리포트를 작성합니다.
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );
