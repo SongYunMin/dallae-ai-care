@@ -14,8 +14,10 @@ import {
   ShieldCheck,
   TrendingUp,
   Calendar,
+  CheckSquare,
 } from 'lucide-react';
 import { formatRelative } from '@/lib/date';
+import { formatItemTime, itemDateTime, todayKey, KIND_META } from '@/lib/checklist';
 import type { AgentNotification } from '@/lib/types';
 
 const NOTI_META: Record<
