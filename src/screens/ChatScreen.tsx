@@ -44,12 +44,20 @@ export function ChatScreen() {
           </div>
           <div>
             <h1 className="text-base font-bold">아이온 AI 돌봄 챗봇</h1>
-            <p className="text-[11px] text-muted-foreground">아이의 기록과 가족 규칙을 바탕으로 답해요</p>
+            <p className="text-[11px] text-muted-foreground">
+              {child.name}이의 기록과 가족 규칙을 보고 답해요
+            </p>
           </div>
         </div>
         <div className="mt-3 rounded-2xl bg-card/80 backdrop-blur p-3 text-xs space-y-0.5">
+          <div className="flex items-center gap-1.5 mb-1">
+            <span className="text-[9px] font-bold tracking-wider bg-foreground/85 text-background px-1.5 py-0.5 rounded-full">
+              지금 보고 있는 기록
+            </span>
+          </div>
           <p className="font-bold">{child.name} · {child.ageInMonths}개월</p>
           <p className="text-muted-foreground">마지막 수유: 오후 2:20 / 160ml</p>
+          <p className="text-muted-foreground">마지막 낮잠 종료: 오후 12:00</p>
           <p className="text-muted-foreground">현재 돌보는 사람: {currentUser.name}</p>
           <p className="text-mint-foreground font-semibold flex items-center gap-1">
             <ShieldCheck size={12} /> 가족 규칙 반영 중
@@ -59,18 +67,37 @@ export function ChatScreen() {
 
       <div ref={scrollerRef} className="flex-1 px-4 py-4 space-y-3 overflow-y-auto">
         {chatMessages.length === 0 && (
-          <div className="space-y-3">
-            <p className="text-xs font-semibold text-muted-foreground px-1">자주 묻는 질문</p>
-            <div className="flex flex-wrap gap-2">
-              {CHAT_SUGGESTIONS.map((s) => (
-                <button
-                  key={s}
-                  onClick={() => send(s)}
-                  className="text-xs px-3 py-2 rounded-full bg-card border border-border shadow-card"
-                >
-                  {s}
-                </button>
-              ))}
+          <div className="space-y-4">
+            <div className="rounded-2xl bg-mint/30 border border-mint/40 p-3">
+              <div className="flex items-start gap-2">
+                <IonMascot variant="wink" size={36} />
+                <div>
+                  <p className="text-xs font-bold">
+                    안녕하세요! {currentUser.name}님,
+                  </p>
+                  <p className="text-[11px] text-foreground/75 mt-0.5 leading-relaxed">
+                    {child.name}이의 모든 기록을 알고 있어요. 돌보면서 궁금한 건
+                    바로 물어보세요. 데이터 기반으로 답해드릴게요.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <p className="text-xs font-bold text-foreground/70 px-1 mb-2">
+                💬 돌봄자가 자주 묻는 질문
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {CHAT_SUGGESTIONS.map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => send(s)}
+                    className="text-xs px-3 py-2 rounded-full bg-card border border-border shadow-card active:scale-95 transition-transform"
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         )}
