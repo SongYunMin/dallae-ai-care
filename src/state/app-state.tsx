@@ -125,6 +125,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     screen,
     payload,
     navigate,
+    goBack,
+    canGoBack: history.length > 0,
     child,
     familyMembers,
     currentUser,
