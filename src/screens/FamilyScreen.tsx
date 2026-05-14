@@ -126,6 +126,26 @@ export function FamilyScreen() {
             </div>
           )}
         </div>
+
+        <div className="rounded-3xl bg-card shadow-card p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-[11px] font-bold tracking-wider text-muted-foreground">현재 로그인</p>
+              <p className="font-semibold text-sm truncate">
+                {currentUser.name} · {roleLabel[currentUser.role]}
+              </p>
+            </div>
+            <button
+              onClick={() => {
+                if (typeof window !== 'undefined' && !window.confirm('로그아웃 할까요?')) return;
+                logout();
+              }}
+              className="h-10 px-3 rounded-xl border border-border text-xs font-semibold flex items-center gap-1 shrink-0"
+            >
+              <LogOut size={14} /> 로그아웃
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );
