@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useApp } from '@/state/app-state';
 import { createInvite } from '@/lib/api';
 import type { UserRole } from '@/lib/types';
-import { Copy, Link2, Plus, Users } from 'lucide-react';
+import { Copy, Link2, LogOut, Plus, Users } from 'lucide-react';
 
 const roleLabel: Record<UserRole, string> = {
   PARENT_ADMIN: '관리자',
