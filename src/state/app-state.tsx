@@ -34,6 +34,8 @@ type Toast = { id: string; text: string };
 type AppState = {
   screen: Screen;
   navigate: (s: Screen, payload?: unknown) => void;
+  goBack: () => void;
+  canGoBack: boolean;
   payload: unknown;
 
   child: typeof MOCK_CHILD;
