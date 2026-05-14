@@ -13,6 +13,7 @@ import { InviteScreen } from "@/screens/InviteScreen";
 import { RulesScreen } from "@/screens/RulesScreen";
 import { ReportScreen } from "@/screens/ReportScreen";
 import { ChecklistScreen } from "@/screens/ChecklistScreen";
+import { ThankYouReportScreen } from "@/screens/ThankYouReportScreen";
 
 export const Route = createFileRoute("/")({
   component: Index,
@@ -26,7 +27,7 @@ export const Route = createFileRoute("/")({
 
 function Inner() {
   const { screen } = useApp();
-  const noNav = screen === "splash" || screen === "onboarding" || screen === "invite" || screen === "report";
+  const noNav = screen === "splash" || screen === "onboarding" || screen === "invite" || screen === "report" || screen === "thankYouReport";
   return (
     <MobileShell hideNav={noNav}>
       {screen === "splash" && <SplashScreen />}
@@ -41,6 +42,7 @@ function Inner() {
       {screen === "invite" && <InviteScreen />}
       {screen === "rules" && <RulesScreen />}
       {screen === "report" && <ReportScreen />}
+      {screen === "thankYouReport" && <ThankYouReportScreen />}
       {screen === "checklist" && <ChecklistScreen />}
     </MobileShell>
   );

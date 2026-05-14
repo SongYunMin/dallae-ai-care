@@ -18,6 +18,7 @@ const quick: { type: CareRecordType; label: string }[] = [
 
 export function CareModeScreen() {
   const { session, startSession, endSession, addRecord, currentUser, toast, navigate, child, records } = useApp();
+  void records;
   const [text, setText] = useState('');
   const [tick, setTick] = useState(0);
 
@@ -181,6 +182,12 @@ export function CareModeScreen() {
 
         <button
           onClick={async () => {
+            const isParent = currentUser.role === 'PARENT_ADMIN' || currentUser.role === 'PARENT_EDITOR';
+            if (!isParent) {
+              toast('돌봄 종료는 부모만 할 수 있어요');
+              return;
+            }
+            if (typeof window !== 'undefined' && !window.confirm('돌봄을 종료할까요?')) return;
             const ended = endSession();
             if (!ended) return;
             const counts = {
@@ -191,11 +198,11 @@ export function CareModeScreen() {
               voiceNotes: records.filter((r) => r.source === 'VOICE').length,
             };
             await endCareSession(ended.id, ended.startedAt, counts);
-            navigate('report');
+            navigate('thankYouReport');
           }}
           className="w-full h-14 rounded-2xl bg-coral text-coral-foreground font-semibold shadow-soft"
         >
-          돌봄 종료하고 리포트 보기
+          돌봄 종료하고 수고리포트 쓰기
         </button>
       </div>
     </div>
