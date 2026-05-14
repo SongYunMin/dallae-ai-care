@@ -6,6 +6,7 @@ import { createCareRecord, endCareSession, parseTextToRecord, startCareSession }
 import { formatDuration, formatTime } from "@/lib/date";
 import { itemDateTime, todayKey, formatItemTime } from "@/lib/checklist";
 import type { CareRecord, CareRecordType, ChecklistItem } from "@/lib/types";
+import { nowKstIso } from "@/lib/kst";
 import { Mic, Send, X } from "lucide-react";
 import moodHappy from "@/assets/moods/happy.png";
 import moodSurprised from "@/assets/moods/surprised.png";
@@ -389,7 +390,7 @@ export function CareModeScreen() {
                   sleep: counts.sleep,
                   medicine: counts.medicine,
                 },
-                sentAt: new Date().toISOString(),
+                sentAt: nowKstIso(),
               });
               navigate("thankYouReport", { careSessionId: ended.id });
             }}

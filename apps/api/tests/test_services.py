@@ -6,7 +6,7 @@ from services.permission_service import build_permission_scope
 from services.rules import DEFAULT_CARE_RULES, merge_default_and_parent_rules
 from services.status_service import get_latest_status
 from services.voice_parser import parse_voice_note_to_record
-from store import DallaeStore
+from store import DallaeStore, now_iso
 
 
 def test_default_rules_are_always_first_and_deduped():
@@ -41,6 +41,10 @@ def test_voice_parser_extracts_feeding_amount():
     assert parsed["amountMl"] == 160
 
 
+def test_now_iso_uses_kst_offset():
+    assert now_iso().endswith("+09:00")
+
+
 def test_latest_status_picks_recent_record_per_kind():
     records = [
         {"type": "FEEDING", "recordedAt": "2026-05-14T01:00:00+00:00"},
@@ -63,6 +67,7 @@ def test_notification_candidate_requires_evidence():
 
     assert candidates
     assert all(candidate["evidence"] for candidate in candidates)
+    assert all(candidate["createdAt"].endswith("+09:00") for candidate in candidates)
 
 
 def test_agent_guard_escalates_fever_reducer_to_parent_check():
@@ -103,6 +108,7 @@ def test_store_persists_records_to_sqlite(tmp_path):
 
     assert any(record["id"] == created["id"] for record in records)
     assert records[0]["recordedAt"] >= records[-1]["recordedAt"]
+    assert created["recordedAt"].endswith("+09:00")
 
 
 def test_agent_context_reads_records_from_sqlite(monkeypatch, tmp_path):

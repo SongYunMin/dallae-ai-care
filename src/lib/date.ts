@@ -1,7 +1,7 @@
+import { kstParts } from './kst';
+
 export function formatTime(iso: string): string {
-  const d = new Date(iso);
-  const h = d.getHours();
-  const m = d.getMinutes();
+  const { hour: h, minute: m } = kstParts(new Date(iso));
   const period = h < 12 ? '오전' : '오후';
   const hh = h % 12 === 0 ? 12 : h % 12;
   return `${period} ${hh}:${String(m).padStart(2, '0')}`;

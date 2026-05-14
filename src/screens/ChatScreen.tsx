@@ -4,6 +4,7 @@ import { IonMascot } from "@/components/IonMascot";
 import { askAgentChat } from "@/lib/api";
 import { CHAT_SUGGESTIONS, DEFAULT_RULES } from "@/lib/mock-data";
 import type { ChatMessage } from "@/lib/types";
+import { nowKstIso } from "@/lib/kst";
 import { Send, ShieldCheck } from "lucide-react";
 
 export function ChatScreen() {
@@ -56,7 +57,7 @@ export function ChatScreen() {
         title: n.title,
         message: n.message,
       })),
-      now: new Date().toISOString(),
+      now: nowKstIso(),
     }),
     [records, checklist, parentRules, child, currentUser, session, childMood, notifications],
   );
@@ -68,7 +69,7 @@ export function ChatScreen() {
       id: "u" + Date.now(),
       role: "user",
       text: trimmed,
-      at: new Date().toISOString(),
+      at: nowKstIso(),
     };
     addChatMessage(userMsg);
     setText("");
@@ -86,7 +87,7 @@ export function ChatScreen() {
         id: "a" + Date.now(),
         role: "agent",
         response,
-        at: new Date().toISOString(),
+        at: nowKstIso(),
       });
     } catch (e) {
       setError(e instanceof Error ? e.message : "오류");

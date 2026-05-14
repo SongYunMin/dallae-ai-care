@@ -7,6 +7,7 @@ import type {
   RecordSource,
   UserRole,
 } from './types';
+import { nowKstIso } from './kst';
 
 const FALLBACK_FAMILY_ID = 'family_1';
 const FALLBACK_CHILD_ID = 'child_1';
@@ -48,7 +49,7 @@ function createLocalRecord(input: {
     childId: FALLBACK_CHILD_ID,
     careSessionId: input.careSessionId,
     type: input.type,
-    recordedAt: new Date().toISOString(),
+    recordedAt: nowKstIso(),
     amountMl: input.amountMl,
     memo: input.memo,
     recordedBy: input.recordedBy,
@@ -217,7 +218,7 @@ export async function startCareSession(caregiverName: string, caregiverId = 'use
   await delay();
   return {
     careSessionId: 'session_' + Date.now(),
-    startedAt: new Date().toISOString(),
+    startedAt: nowKstIso(),
     status: 'ACTIVE' as const,
     caregiverName,
   };

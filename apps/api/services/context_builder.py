@@ -1,9 +1,10 @@
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 
 from services.notification_service import generate_agent_notification_candidates
 from services.permission_service import build_permission_scope
 from services.rules import merge_default_and_parent_rules
 from services.status_service import get_latest_status
+from services.time_service import now_kst
 from store import store
 
 
@@ -27,7 +28,7 @@ def build_shareable_child_snapshot(child: dict, permission_scope: dict) -> dict:
 
 
 def list_recent_records(child_id: str, hours: int = 24) -> list[dict]:
-    cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
+    cutoff = now_kst() - timedelta(hours=hours)
     return [
         record
         for record in store.child_records(child_id)

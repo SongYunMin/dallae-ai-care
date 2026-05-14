@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from services.time_service import now_kst_iso
 
 
 def generate_agent_notification_candidates(
@@ -10,7 +10,7 @@ def generate_agent_notification_candidates(
 ) -> list[dict]:
     """LLM 전에 싸고 확실한 규칙 기반 AI 알림 후보를 만든다."""
     candidates: list[dict] = []
-    now = datetime.now(timezone.utc).isoformat()
+    now = now_kst_iso()
 
     if latest_status.get("feeding") is None:
         candidates.append(

@@ -1,16 +1,12 @@
 import type { ChecklistItem, ChecklistKind } from './types';
+import { dateFromKstWallTime, kstDateKey, kstWeekday } from './kst';
 
 export function todayKey(d: Date = new Date()): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
+  return kstDateKey(d);
 }
 
 export function itemDateTime(item: ChecklistItem): Date {
-  const [y, m, d] = item.date.split('-').map(Number);
-  const [hh, mm] = item.time.split(':').map(Number);
-  return new Date(y, m - 1, d, hh, mm, 0, 0);
+  return dateFromKstWallTime(item.date, item.time);
 }
 
 export function formatItemTime(time: string): string {
@@ -23,11 +19,10 @@ export function formatItemTime(time: string): string {
 
 export function formatDateLabel(date: string): string {
   const [y, m, d] = date.split('-').map(Number);
-  const dt = new Date(y, m - 1, d);
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const dt = dateFromKstWallTime(date);
+  const today = dateFromKstWallTime(todayKey());
   const diff = Math.round((dt.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-  const weekday = ['일', '월', '화', '수', '목', '금', '토'][dt.getDay()];
+  const weekday = ['일', '월', '화', '수', '목', '금', '토'][kstWeekday(date)];
   const base = `${m}월 ${d}일 (${weekday})`;
   if (diff === 0) return `오늘 · ${base}`;
   if (diff === 1) return `내일 · ${base}`;

@@ -19,6 +19,7 @@ import {
 } from '@/lib/mock-data';
 import { itemDateTime, makeMockChecklist } from '@/lib/checklist';
 import { evaluateAgentNotifications, updateAgentNotificationStatus } from '@/lib/api';
+import { nowKstIso } from '@/lib/kst';
 
 export type Screen =
   | 'splash'
@@ -305,7 +306,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     startSession: (s) => setSession(s),
     endSession: () => {
       if (!session) return null;
-      const ended: CareSession = { ...session, status: 'ENDED', endedAt: new Date().toISOString() };
+      const ended: CareSession = { ...session, status: 'ENDED', endedAt: nowKstIso() };
       setLastEnded(ended);
       setSession(null);
       return ended;
@@ -337,7 +338,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             ? {
                 ...it,
                 completed: !it.completed,
-                completedAt: !it.completed ? new Date().toISOString() : undefined,
+                completedAt: !it.completed ? nowKstIso() : undefined,
                 completedBy: !it.completed ? currentUser.name : undefined,
               }
             : it,
@@ -362,7 +363,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     },
     childMood,
     setChildMood: (m) =>
-      setChildMoodState(m ? { ...m, at: new Date().toISOString() } : null),
+      setChildMoodState(m ? { ...m, at: nowKstIso() } : null),
   };
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

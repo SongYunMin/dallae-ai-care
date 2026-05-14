@@ -1,4 +1,7 @@
 import type { AgentNotification, CareRecord, Child, FamilyMember } from './types';
+import { nowKstIso } from './kst';
+
+const kstIsoAgo = (ms: number) => nowKstIso(new Date(Date.now() - ms));
 
 export const MOCK_FAMILY = {
   id: 'family_1',
@@ -40,7 +43,7 @@ export const MOCK_RECORDS: CareRecord[] = [
     familyId: 'family_1',
     childId: 'child_1',
     type: 'FEEDING',
-    recordedAt: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(),
+    recordedAt: kstIsoAgo(1000 * 60 * 60 * 2),
     amountMl: 160,
     memo: '분유 잘 먹음',
     recordedBy: 'user_parent_1',
@@ -52,7 +55,7 @@ export const MOCK_RECORDS: CareRecord[] = [
     familyId: 'family_1',
     childId: 'child_1',
     type: 'SLEEP_END',
-    recordedAt: new Date(Date.now() - 1000 * 60 * 60 * 4).toISOString(),
+    recordedAt: kstIsoAgo(1000 * 60 * 60 * 4),
     memo: '낮잠 종료',
     recordedBy: 'user_parent_1',
     recordedByName: '엄마',
@@ -63,7 +66,7 @@ export const MOCK_RECORDS: CareRecord[] = [
     familyId: 'family_1',
     childId: 'child_1',
     type: 'DIAPER',
-    recordedAt: new Date(Date.now() - 1000 * 60 * 60 * 5).toISOString(),
+    recordedAt: kstIsoAgo(1000 * 60 * 60 * 5),
     memo: '정상',
     recordedBy: 'user_parent_1',
     recordedByName: '엄마',
@@ -74,7 +77,7 @@ export const MOCK_RECORDS: CareRecord[] = [
     familyId: 'family_1',
     childId: 'child_1',
     type: 'SLEEP_START',
-    recordedAt: new Date(Date.now() - 1000 * 60 * 60 * 6).toISOString(),
+    recordedAt: kstIsoAgo(1000 * 60 * 60 * 6),
     memo: '낮잠 시작',
     recordedBy: 'user_parent_1',
     recordedByName: '엄마',
@@ -92,7 +95,7 @@ export const MOCK_NOTIFICATIONS: AgentNotification[] = [
     evidence: '최근 7일 평균 취침 21:45 → 어제 22:30, 그제 22:20 (수면 기록 기반)',
     priority: 'MEDIUM',
     status: 'UNREAD',
-    createdAt: new Date().toISOString(),
+    createdAt: nowKstIso(),
   },
   {
     id: 'noti_2',
@@ -103,7 +106,7 @@ export const MOCK_NOTIFICATIONS: AgentNotification[] = [
     evidence: '최근 7일 낮잠 기록 5/7회 (이상치: 화 12:00 시작 후 종료 누락)',
     priority: 'LOW',
     status: 'UNREAD',
-    createdAt: new Date(Date.now() - 1000 * 60 * 60).toISOString(),
+    createdAt: kstIsoAgo(1000 * 60 * 60),
   },
   {
     id: 'noti_5',
@@ -114,7 +117,7 @@ export const MOCK_NOTIFICATIONS: AgentNotification[] = [
     evidence: '최근 4일 CRYING 기록 7건 중 5건이 16:50–17:30 사이',
     priority: 'MEDIUM',
     status: 'UNREAD',
-    createdAt: new Date(Date.now() - 1000 * 60 * 45).toISOString(),
+    createdAt: kstIsoAgo(1000 * 60 * 45),
   },
   {
     id: 'noti_3',
@@ -125,7 +128,7 @@ export const MOCK_NOTIFICATIONS: AgentNotification[] = [
     evidence: '가족 규칙 #1 · 돌봄자 역할 CAREGIVER_EDITOR',
     priority: 'HIGH',
     status: 'UNREAD',
-    createdAt: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
+    createdAt: kstIsoAgo(1000 * 60 * 30),
   },
   {
     id: 'noti_4',
@@ -136,7 +139,7 @@ export const MOCK_NOTIFICATIONS: AgentNotification[] = [
     evidence: '내일 일정: 9시 영유아 검진 · 평소 기상 8:10',
     priority: 'MEDIUM',
     status: 'UNREAD',
-    createdAt: new Date(Date.now() - 1000 * 60 * 90).toISOString(),
+    createdAt: kstIsoAgo(1000 * 60 * 90),
   },
 ];
 

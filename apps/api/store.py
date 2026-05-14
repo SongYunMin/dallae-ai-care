@@ -3,13 +3,15 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 from uuid import uuid4
 
+from services.time_service import now_kst_iso
+
 
 def now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return now_kst_iso()
 
 
 class DallaeStore:
