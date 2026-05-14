@@ -83,6 +83,22 @@ export type CareSession = {
   status: 'ACTIVE' | 'ENDED';
 };
 
+export type ChecklistKind = 'FEEDING' | 'DIAPER' | 'SLEEP' | 'MEDICINE' | 'BATH' | 'OTHER';
+
+export type ChecklistItem = {
+  id: string;
+  date: string; // YYYY-MM-DD
+  time: string; // HH:mm (24h)
+  label: string;
+  kind: ChecklistKind;
+  completed: boolean;
+  completedAt?: string;
+  completedBy?: string;
+  notifiedDue?: boolean;
+  notifiedFollowup?: boolean;
+  createdBy: string;
+};
+
 export type Invite = {
   token: string;
   familyId: string;
