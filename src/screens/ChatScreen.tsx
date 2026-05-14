@@ -36,8 +36,8 @@ export function ChatScreen() {
   }, [chatMessages, loading]);
 
   return (
-    <div className="flex flex-col min-h-dvh">
-      <header className="px-5 pt-7 pb-3 gradient-hero">
+    <div className="flex flex-col h-full min-h-0">
+      <header className="px-5 pt-7 pb-3 gradient-hero shrink-0">
         <div className="flex items-center gap-3">
           <div className="rounded-full bg-card/70 p-1 shadow-card">
             <IonMascot variant="basic" size={48} />
@@ -65,7 +65,7 @@ export function ChatScreen() {
         </div>
       </header>
 
-      <div ref={scrollerRef} className="flex-1 px-4 py-4 space-y-3 overflow-y-auto">
+      <div ref={scrollerRef} className="flex-1 min-h-0 px-4 py-4 space-y-3 overflow-y-auto">
         {chatMessages.length === 0 && (
           <div className="space-y-4">
             <div className="rounded-2xl bg-mint/30 border border-mint/40 p-3">
@@ -124,7 +124,7 @@ export function ChatScreen() {
         )}
       </div>
 
-      <div className="sticky bottom-0 p-3 bg-background/95 backdrop-blur border-t border-border">
+      <div className="shrink-0 p-3 bg-background/95 backdrop-blur border-t border-border">
         <div className="flex items-center gap-2">
           <input
             value={text}
