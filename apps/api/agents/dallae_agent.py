@@ -25,6 +25,8 @@ DALLAE_CUTE_TONE_POLICY = """
 [달래 말투 가이드]
 - 기본 응답은 달래가 옆에서 같이 챙겨주는 것처럼 다정하고 귀엽게 쓴다.
 - "~해요", "~좋아요", "살짝", "꼬옥", "차근차근" 같은 부드러운 표현을 자연스럽게 사용한다.
+- 기록을 인용할 때는 가능한 한 근거가 된 기록의 작성자/값을 짧게 드러낸다.
+- 작성자가 부모인지 돌봄자인지 단정하지 말고, 컨텍스트에 있는 기록 작성자 이름을 그대로 사용한다.
 - 과한 아기말, 반복 감탄사, 이모지는 쓰지 않는다.
 - 약물, 의료, 위험 신호, 보호자 확인 안내는 귀여운 표현보다 명확성과 단호함을 우선한다.
 """
@@ -206,8 +208,11 @@ class CareChatAgent(BaseDallaeAgent):
             feeding = latest.get("feeding")
             answer = "최근 수유 기록이 아직 없어요. 보호자에게 마지막 수유 시간을 차근차근 확인해 주세요."
             if feeding:
-                amount = f" {feeding.get('amountMl')}ml" if feeding.get("amountMl") else ""
-                answer = f"마지막 수유 기록은 {amount.strip() or '수유'}로 남아 있어요. 배고픈 신호가 보이면 살짝 확인해 주세요."
+                # 기록 작성자를 함께 보여주면 답변이 실제 기록을 근거로 했는지 돌봄자가 바로 확인할 수 있다.
+                author = feeding.get("recordedByName")
+                author_phrase = f"{author}가 남긴 " if author else ""
+                amount = f"{feeding.get('amountMl')}ml" if feeding.get("amountMl") else feeding.get("memo") or "수유"
+                answer = f"마지막 수유는 {author_phrase}{amount} 기록이에요. 배고픈 신호가 보이면 살짝 확인해 주세요."
             return {
                 "answer": answer,
                 "nextActions": ["아이의 배고픈 신호를 확인해 주세요.", "수유했다면 기록을 남겨주세요."],
@@ -217,10 +222,10 @@ class CareChatAgent(BaseDallaeAgent):
                 "escalation": "NONE",
             }
         return {
-            "answer": "최근 기록을 기준으로 기저귀, 졸림 신호, 마지막 수유 시간을 차근차근 확인해보면 좋아요.",
-            "nextActions": ["기저귀 상태를 확인해 주세요.", "졸려 보이면 조용한 곳에서 꼬옥 안아주세요.", "필요하면 보호자에게 확인해 주세요."],
+            "answer": "좋아요, 최근 기록을 기준으로 같이 확인해볼게요. 먼저 기저귀, 졸림 신호, 마지막 수유 시간을 차근차근 살펴보면 좋아요.",
+            "nextActions": ["기저귀 상태를 살짝 확인해 주세요.", "졸려 보이면 조용한 곳에서 꼬옥 안아주세요.", "필요하면 보호자에게 짧게 확인해 주세요."],
             "ruleReminders": rules[:2],
-            "recordSuggestions": ["방금 확인한 상태를 기록해두면 다음 보호자가 이어받기 쉽습니다."],
+            "recordSuggestions": ["방금 확인한 상태를 기록해두면 다음 보호자가 이어받기 쉬워요."],
             "proactiveNotifications": [],
             "escalation": "NONE",
         }

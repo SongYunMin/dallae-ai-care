@@ -95,6 +95,7 @@ def test_chat_agent_prompt_includes_cute_tone_without_softening_safety():
     assert "다정하고 귀엽게" in prompt
     assert "위험 신호" in prompt
     assert "명확성과 단호함" in prompt
+    assert "근거가 된 기록" in prompt
 
 
 def test_chat_agent_fallback_uses_cute_tone_for_general_response():
@@ -102,7 +103,28 @@ def test_chat_agent_fallback_uses_cute_tone_for_general_response():
     response = service.mock_response("지금 뭐부터 확인하면 돼?", {"activeRules": [], "latestStatus": {}})
 
     assert "차근차근" in response["answer"]
+    assert "같이 확인해볼게요" in response["answer"]
     assert any("꼬옥" in action for action in response["nextActions"])
+
+
+def test_chat_agent_fallback_mentions_parent_record_author_for_feeding():
+    service = DallaeAgentService()
+    response = service.mock_response(
+        "마지막 수유 언제였어?",
+        {
+            "activeRules": [],
+            "latestStatus": {
+                "feeding": {
+                    "amountMl": 190,
+                    "recordedByName": "엄마",
+                    "memo": "분유 190ml",
+                },
+            },
+        },
+    )
+
+    assert "엄마가 남긴" in response["answer"]
+    assert "190ml" in response["answer"]
 
 
 def test_thank_you_prompt_includes_cute_tone():
