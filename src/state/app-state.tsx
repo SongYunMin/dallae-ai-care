@@ -183,6 +183,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
       // also add to family if not present
       setFamilyMembers((arr) => (arr.find((a) => a.id === u.id) ? arr : [...arr, { id: u.id, name: u.name, relationship: '돌봄자', role: u.role }]));
     },
+    logout: () => {
+      setSession(null);
+      setLastEnded(null);
+      setInvite(null);
+      setPendingChatQuestion(null);
+      setCurrentUser({ id: 'user_parent_1', name: '엄마', role: 'PARENT_ADMIN' });
+      setHistory([]);
+      setPayload(null);
+      setScreen('splash');
+      toast('로그아웃했어요');
+    },
     records,
     addRecord: (r) => setRecords((arr) => [r, ...arr]),
     parentRules,
