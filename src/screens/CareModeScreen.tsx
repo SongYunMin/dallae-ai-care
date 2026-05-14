@@ -182,11 +182,6 @@ export function CareModeScreen() {
 
         <button
           onClick={async () => {
-            const isParent = currentUser.role === 'PARENT_ADMIN' || currentUser.role === 'PARENT_EDITOR';
-            if (!isParent) {
-              toast('돌봄 종료는 부모만 할 수 있어요');
-              return;
-            }
             if (typeof window !== 'undefined' && !window.confirm('돌봄을 종료할까요?')) return;
             const ended = endSession();
             if (!ended) return;
@@ -202,7 +197,7 @@ export function CareModeScreen() {
           }}
           className="w-full h-14 rounded-2xl bg-coral text-coral-foreground font-semibold shadow-soft"
         >
-          돌봄 종료하고 수고리포트 쓰기
+          돌봄 종료하고 리포트 쓰기
         </button>
       </div>
     </div>
