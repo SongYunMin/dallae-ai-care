@@ -162,18 +162,30 @@ export function DashboardScreen() {
         </div>
 
         {/* === Child latest status (compact) === */}
-        <div className="rounded-3xl bg-card shadow-card p-4 space-y-3">
+        <div className="rounded-3xl bg-card shadow-card p-4">
           <div className="flex items-center gap-2">
             <div className="rounded-xl bg-mint/40 p-0.5">
               <IonMascot variant="basic" size={32} />
             </div>
-            <div>
-              <p className="font-bold text-sm">
-                {child.name} · {child.ageInMonths}개월
+            <div className="flex-1">
+              <p className="text-[11px] font-bold tracking-wider text-foreground/60">
+                마지막 상태
               </p>
-              <p className="text-[11px] text-muted-foreground">
-                {child.feedingType === "FORMULA" ? "분유" : "수유"} · 컨디션 좋음
+              <p className="font-bold text-sm leading-snug">
+                {lastRecord
+                  ? `${RECORD_LABEL[lastRecord.type] ?? lastRecord.type}${
+                      lastRecord.amountMl ? ` ${lastRecord.amountMl}ml` : ""
+                    } · ${new Date(lastRecord.at).toLocaleTimeString("ko-KR", {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}`
+                  : "아직 기록이 없어요"}
               </p>
+              {lastRecord?.recordedBy && (
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  {lastRecord.recordedBy}님이 기록
+                </p>
+              )}
             </div>
           </div>
         </div>
