@@ -1,7 +1,7 @@
-import basic from '@/assets/ion/basic.svg';
-import wink from '@/assets/ion/wink.svg';
-import sleep from '@/assets/ion/sleep.svg';
-import report from '@/assets/ion/report.svg';
+import basic from '@/assets/ion/basic.png';
+import wink from '@/assets/ion/wink.png';
+import sleep from '@/assets/ion/sleep.png';
+import report from '@/assets/ion/report.png';
 import hug from '@/assets/ion/hug.png';
 
 const map = { basic, wink, sleep, report, hug } as const;
