@@ -4,7 +4,6 @@ import type { AgentNotification } from '@/lib/types';
 import {
   Sparkles,
   MessageCircle,
-  ClipboardList,
   Clock,
   AlertCircle,
   TrendingUp,
