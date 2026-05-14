@@ -12,15 +12,16 @@ const tabs: { id: Screen; label: string; icon: typeof Home }[] = [
 export function BottomNav() {
   const { screen, navigate, notifications, currentUser } = useApp();
   const unread = notifications.filter((n) => n.status === 'UNREAD').length;
-  const isViewer = currentUser.role === 'CAREGIVER_VIEWER';
+  const isAdmin = currentUser.role === 'PARENT_ADMIN';
+  const visibleTabs = tabs.filter((t) => isAdmin || (t.id !== 'records' && t.id !== 'family'));
 
   return (
     <nav className="absolute bottom-0 inset-x-0 z-40 bg-card/95 backdrop-blur border-t border-border safe-bottom">
-      <ul className="grid grid-cols-5 px-2 pt-2 pb-2">
-        {tabs.map((t) => {
+      <ul className={`grid px-2 pt-2 pb-2`} style={{ gridTemplateColumns: `repeat(${visibleTabs.length}, minmax(0, 1fr))` }}>
+        {visibleTabs.map((t) => {
           const Active = screen === t.id;
           const Icon = t.icon;
-          const dimmed = isViewer && (t.id === 'records' || t.id === 'careMode' || t.id === 'family');
+          const dimmed = false;
           return (
             <li key={t.id}>
               <button
