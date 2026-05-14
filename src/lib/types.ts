@@ -57,9 +57,10 @@ export type FamilyMember = {
 
 export type AgentNotification = {
   id: string;
-  type: 'ROUTINE_SUGGESTION' | 'MISSED_RECORD' | 'SCHEDULE' | 'RULE_REMINDER' | 'CARE_TIP';
+  type: 'ROUTINE_SUGGESTION' | 'MISSED_RECORD' | 'SCHEDULE' | 'RULE_REMINDER' | 'CARE_TIP' | 'CARE_PATTERN';
   title: string;
   message: string;
+  evidence?: string; // 근거 데이터 (예: "최근 7일 수면 기록 평균 21:45 → 어제 22:30")
   priority: AgentNotificationPriority;
   status: AgentNotificationStatus;
   createdAt: string;
