@@ -29,7 +29,7 @@ function Inner() {
   const { screen } = useApp();
   const noNav = screen === "splash" || screen === "onboarding" || screen === "invite" || screen === "report" || screen === "thankYouReport";
   return (
-    <MobileShell hideNav={noNav}>
+    <MobileShell hideNav={noNav} flushBottom={screen === "chat"}>
       {screen === "splash" && <SplashScreen />}
       {screen === "onboarding" && <OnboardingScreen />}
       {screen === "dashboard" && <DashboardScreen />}
