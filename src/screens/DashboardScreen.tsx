@@ -38,7 +38,7 @@ const NOTI_META: Record<
 };
 
 export function DashboardScreen() {
-  const { child, records, currentUser, session, notifications, navigate, parentRules, checklist } =
+  const { child, records, currentUser, session, notifications, navigate, parentRules, checklist, childMood } =
     useApp();
 
   const today = todayKey();
