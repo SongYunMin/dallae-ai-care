@@ -11,7 +11,6 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiThankyouRouteImport } from './routes/api/thankyou'
-import { Route as ApiChatRouteImport } from './routes/api/chat'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -23,39 +22,30 @@ const ApiThankyouRoute = ApiThankyouRouteImport.update({
   path: '/api/thankyou',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiChatRoute = ApiChatRouteImport.update({
-  id: '/api/chat',
-  path: '/api/chat',
-  getParentRoute: () => rootRouteImport,
-} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/api/chat': typeof ApiChatRoute
   '/api/thankyou': typeof ApiThankyouRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/api/chat': typeof ApiChatRoute
   '/api/thankyou': typeof ApiThankyouRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/api/chat': typeof ApiChatRoute
   '/api/thankyou': typeof ApiThankyouRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/api/chat' | '/api/thankyou'
+  fullPaths: '/' | '/api/thankyou'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/api/chat' | '/api/thankyou'
-  id: '__root__' | '/' | '/api/chat' | '/api/thankyou'
+  to: '/' | '/api/thankyou'
+  id: '__root__' | '/' | '/api/thankyou'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  ApiChatRoute: typeof ApiChatRoute
   ApiThankyouRoute: typeof ApiThankyouRoute
 }
 
@@ -75,21 +65,23 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiThankyouRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/chat': {
-      id: '/api/chat'
-      path: '/api/chat'
-      fullPath: '/api/chat'
-      preLoaderRoute: typeof ApiChatRouteImport
-      parentRoute: typeof rootRouteImport
-    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  ApiChatRoute: ApiChatRoute,
   ApiThankyouRoute: ApiThankyouRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
