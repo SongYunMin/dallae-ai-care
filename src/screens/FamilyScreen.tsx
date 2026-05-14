@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useApp } from '@/state/app-state';
 import { createInvite } from '@/lib/api';
 import type { UserRole } from '@/lib/types';
-import { Copy, Link2, Plus, Users } from 'lucide-react';
+import { Copy, Link2, LogOut, Plus, Users } from 'lucide-react';
 
 const roleLabel: Record<UserRole, string> = {
   PARENT_ADMIN: '관리자',
@@ -12,7 +12,7 @@ const roleLabel: Record<UserRole, string> = {
 };
 
 export function FamilyScreen() {
-  const { familyMembers, invite, setInvite, toast, navigate } = useApp();
+  const { familyMembers, invite, setInvite, toast, navigate, currentUser, logout } = useApp();
   const [relationship, setRelationship] = useState('할머니');
   const [role, setRole] = useState<UserRole>('CAREGIVER_EDITOR');
 
@@ -125,6 +125,26 @@ export function FamilyScreen() {
               </div>
             </div>
           )}
+        </div>
+
+        <div className="rounded-3xl bg-card shadow-card p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-[11px] font-bold tracking-wider text-muted-foreground">현재 로그인</p>
+              <p className="font-semibold text-sm truncate">
+                {currentUser.name} · {roleLabel[currentUser.role]}
+              </p>
+            </div>
+            <button
+              onClick={() => {
+                if (typeof window !== 'undefined' && !window.confirm('로그아웃 할까요?')) return;
+                logout();
+              }}
+              className="h-10 px-3 rounded-xl border border-border text-xs font-semibold flex items-center gap-1 shrink-0"
+            >
+              <LogOut size={14} /> 로그아웃
+            </button>
+          </div>
         </div>
       </div>
     </div>

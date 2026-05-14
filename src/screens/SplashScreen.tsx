@@ -1,8 +1,24 @@
+import { useState } from 'react';
 import { useApp } from '@/state/app-state';
 import { IonMascot } from '@/components/IonMascot';
 
 export function SplashScreen() {
-  const { navigate } = useApp();
+  const { navigate, toast } = useApp();
+  const [showInvite, setShowInvite] = useState(false);
+  const [inviteInput, setInviteInput] = useState('');
+
+  const enterAsCaregiver = () => {
+    const raw = inviteInput.trim();
+    // 토큰만 입력했거나 전체 URL을 붙여넣은 경우 모두 지원
+    const urlMatch = raw.match(/invite[/=]([\w-]+)/);
+    const token = urlMatch
+      ? urlMatch[1].startsWith('invite_')
+        ? urlMatch[1]
+        : `invite_${urlMatch[1]}`
+      : raw || 'invite_demo123';
+    navigate('invite', { token });
+  };
+
   return (
     <div className="min-h-dvh flex flex-col px-6 pt-16 pb-10 gradient-hero">
       <div className="flex-1 flex flex-col items-center justify-center text-center gap-6">
@@ -29,12 +45,54 @@ export function SplashScreen() {
         >
           부모로 시작하기
         </button>
-        <button
-          onClick={() => navigate('invite', { token: 'invite_demo123' })}
-          className="w-full h-14 rounded-2xl bg-card text-foreground font-semibold text-base border border-border active:scale-[0.98] transition-transform"
-        >
-          돌봄 도우미로 입장하기
-        </button>
+
+        {showInvite ? (
+          <div className="rounded-2xl bg-card border border-border p-3 space-y-2 shadow-soft">
+            <p className="text-xs font-semibold text-foreground/80">
+              초대 링크 또는 코드를 붙여넣어 주세요
+            </p>
+            <input
+              value={inviteInput}
+              onChange={(e) => setInviteInput(e.target.value)}
+              placeholder="예: invite_demo123 또는 https://.../invite/..."
+              className="w-full h-11 px-3 rounded-xl bg-cream border border-border text-sm"
+            />
+            <div className="flex gap-2">
+              <button
+                onClick={() => {
+                  setShowInvite(false);
+                  setInviteInput('');
+                }}
+                className="h-11 px-4 rounded-xl border border-border text-sm font-semibold"
+              >
+                취소
+              </button>
+              <button
+                onClick={enterAsCaregiver}
+                className="flex-1 h-11 rounded-xl bg-primary text-primary-foreground text-sm font-semibold"
+              >
+                입장하기
+              </button>
+            </div>
+            <button
+              onClick={() => {
+                setInviteInput('invite_demo123');
+                toast('데모 초대코드를 채웠어요');
+              }}
+              className="w-full text-[11px] text-muted-foreground underline"
+            >
+              데모 초대코드 사용
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => setShowInvite(true)}
+            className="w-full h-14 rounded-2xl bg-card text-foreground font-semibold text-base border border-border active:scale-[0.98] transition-transform"
+          >
+            돌봄 도우미로 입장하기
+          </button>
+        )}
+
         <button
           onClick={() => navigate('dashboard')}
           className="w-full text-sm text-muted-foreground py-2"
