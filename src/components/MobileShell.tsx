@@ -27,7 +27,9 @@ export function MobileShell({ children, hideNav = false }: { children: ReactNode
             <ChevronLeft size={22} className="text-foreground" />
           </button>
         )}
-        <main className={`flex-1 overflow-y-auto overscroll-contain ${hideNav ? '' : 'pb-24'} safe-bottom`}>{children}</main>
+        <main className={`flex-1 min-h-0 overflow-y-auto overscroll-contain ${hideNav ? 'safe-bottom' : 'with-bottom-nav-space'}`}>
+          {children}
+        </main>
         {!hideNav && <BottomNav />}
         {/* toasts */}
         <div className="pointer-events-none absolute inset-x-0 bottom-24 mx-auto max-w-[430px] flex flex-col items-center gap-2 px-4 z-50">
