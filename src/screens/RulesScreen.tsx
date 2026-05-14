@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useApp } from '@/state/app-state';
 import { DEFAULT_RULES } from '@/lib/mock-data';
-import { ShieldCheck, Plus, ChevronLeft } from 'lucide-react';
+import { ShieldCheck, Plus } from 'lucide-react';
 
 export function RulesScreen() {
   const { parentRules, addRule, navigate, toast } = useApp();
