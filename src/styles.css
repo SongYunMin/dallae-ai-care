@@ -104,4 +104,5 @@
   .shadow-card { box-shadow: var(--shadow-card); }
   .shadow-frame { box-shadow: var(--shadow-frame); }
   .safe-bottom { padding-bottom: max(env(safe-area-inset-bottom), 0px); }
+  .with-bottom-nav-space { padding-bottom: calc(104px + max(env(safe-area-inset-bottom), 0px)); }
 }
