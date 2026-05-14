@@ -55,9 +55,24 @@ export type FamilyMember = {
   role: UserRole;
 };
 
+export type ThankYouTone = 'WARM' | 'FRIENDLY' | 'POLITE' | 'CHEERFUL' | 'CONCISE';
+
+export type ThankYouReport = {
+  id: string;
+  sessionId: string;
+  fromUserId: string;
+  fromUserName: string;
+  toCaregiverName: string;
+  message: string;
+  tone?: ThankYouTone;
+  durationLabel: string;
+  counts: { feeding: number; diaper: number; sleep: number; medicine: number };
+  sentAt: string;
+};
+
 export type AgentNotification = {
   id: string;
-  type: 'ROUTINE_SUGGESTION' | 'MISSED_RECORD' | 'SCHEDULE' | 'RULE_REMINDER' | 'CARE_TIP' | 'CARE_PATTERN';
+  type: 'ROUTINE_SUGGESTION' | 'MISSED_RECORD' | 'SCHEDULE' | 'RULE_REMINDER' | 'CARE_TIP' | 'CARE_PATTERN' | 'THANK_YOU';
   title: string;
   message: string;
   evidence?: string; // 근거 데이터 (예: "최근 7일 수면 기록 평균 21:45 → 어제 22:30")

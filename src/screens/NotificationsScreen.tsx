@@ -10,6 +10,7 @@ import {
   TrendingUp,
   ShieldCheck,
   Calendar,
+  HeartHandshake,
 } from 'lucide-react';
 
 const priorityLabel = { LOW: '낮음', MEDIUM: '보통', HIGH: '중요' } as const;
@@ -59,6 +60,12 @@ const TYPE_META: Record<
     tone: 'bg-cream text-foreground',
     icon: Sparkles,
     desc: '오늘에 맞춘 작은 팁',
+  },
+  THANK_YOU: {
+    label: '수고리포트',
+    tone: 'bg-coral/40 text-foreground',
+    icon: HeartHandshake,
+    desc: '부모가 보낸 감사 메시지',
   },
 };
 

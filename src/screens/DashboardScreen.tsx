@@ -15,6 +15,7 @@ import {
   TrendingUp,
   Calendar,
   CheckSquare,
+  HeartHandshake as HeartHandshakeIcon,
 } from 'lucide-react';
 import { formatRelative } from '@/lib/date';
 import { formatItemTime, itemDateTime, todayKey, KIND_META } from '@/lib/checklist';
@@ -30,6 +31,7 @@ const NOTI_META: Record<
   RULE_REMINDER: { label: '가족 규칙', tone: 'bg-foreground/85 text-background', icon: ShieldCheck },
   SCHEDULE: { label: '일정 알림', tone: 'bg-cream text-foreground', icon: Calendar },
   CARE_TIP: { label: '돌봄 팁', tone: 'bg-cream text-foreground', icon: Sparkles },
+  THANK_YOU: { label: '수고리포트', tone: 'bg-coral/40 text-foreground', icon: HeartHandshakeIcon },
 };
 
 export function DashboardScreen() {
