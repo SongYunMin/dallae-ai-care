@@ -1,80 +1,77 @@
 import { useApp } from '@/state/app-state';
-import { IonMascot } from '@/components/IonMascot';
 import { formatTime } from '@/lib/date';
-import type { CareRecord } from '@/lib/types';
-import { Heart, ClipboardList, Sparkles } from 'lucide-react';
-
-const TYPE_LABEL: Record<CareRecord['type'], string> = {
-  FEEDING: '수유',
-  DIAPER: '기저귀',
-  SLEEP_START: '낮잠 시작',
-  SLEEP_END: '낮잠 종료',
-  MEDICINE: '약',
-  CRYING: '울음',
-  NOTE: '메모',
-};
+import { Sparkles, MessageCircleHeart } from 'lucide-react';
+import heroImg from '@/assets/thankyou-hero.png';
 
 export function ThankYouReportScreen() {
   const { lastEndedSession, records, thankYouReports, navigate } = useApp();
   const session = lastEndedSession;
   const report = thankYouReports.find((r) => r.sessionId === session?.id) ?? thankYouReports[0];
 
-  const sessionRecords = session
-    ? records
-        .filter((r) => new Date(r.at).getTime() >= new Date(session.startedAt).getTime())
-        .filter((r) => !session.endedAt || new Date(r.at).getTime() <= new Date(session.endedAt).getTime())
-        .sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime())
-    : [];
-
-  const aiGenerated = report?.fromUserName.includes('AI');
+  const sentTime = report ? formatTime(report.sentAt) : '';
+  const aiGenerated = !!report?.fromUserName.includes('AI');
 
   return (
-    <div className="flex flex-col px-5 pt-8 pb-8 gradient-hero min-h-dvh">
-      <div className="flex-1 space-y-4">
-        <div className="text-center space-y-2">
-          <IonMascot variant="wink" size={120} className="mx-auto" />
-          <h1 className="text-xl font-bold leading-snug">
-            오늘 돌봄을 마쳤어요<br />
-            <span className="text-primary">부모님이 감사 인사</span>를 보냈어요
-          </h1>
-          <p className="text-xs text-muted-foreground">
-            {report?.durationLabel ?? ''} 동안 돌봐주셔서 감사합니다
-          </p>
-        </div>
+    <div className="flex flex-col min-h-dvh bg-cream">
+      {/* Hero illustration */}
+      <div className="relative">
+        <img
+          src={heroImg}
+          alt="수고 리포트 일러스트"
+          className="w-full h-auto block select-none"
+          draggable={false}
+        />
+      </div>
 
-        {/* 부모님이 보낸 감사 메시지 */}
-        {report && (
-          <div className="rounded-3xl bg-card shadow-card p-5 space-y-3 border-2 border-coral/30">
-            <div className="flex items-center gap-1.5">
-              <Heart size={14} className="text-coral-foreground" fill="currentColor" />
-              <p className="text-[11px] font-bold tracking-wider text-coral-foreground">
-                부모님의 감사 메시지
-              </p>
+      <div className="flex-1 px-5 -mt-6 pb-8 space-y-4">
+        {/* Message card */}
+        {report ? (
+          <div className="rounded-3xl bg-card shadow-card p-5 space-y-3">
+            <p className="text-xs text-muted-foreground">
+              From. <span className="text-foreground font-semibold">{report.fromUserName}</span>
               {aiGenerated && (
-                <span className="ml-auto text-[10px] font-bold tracking-wider bg-mint/50 text-mint-foreground px-2 py-0.5 rounded-full flex items-center gap-1">
+                <span className="ml-2 inline-flex items-center gap-1 text-[10px] font-bold tracking-wider bg-mint/50 text-mint-foreground px-2 py-0.5 rounded-full align-middle">
                   <Sparkles size={9} /> AI 작성
                 </span>
               )}
-            </div>
-            <p className="text-sm leading-relaxed whitespace-pre-wrap">
-              {report.message}
             </p>
-            {aiGenerated && (
-              <p className="text-[10px] text-muted-foreground leading-relaxed pt-1 border-t border-border">
-                부모님이 작성한 메시지가 없어 오늘 돌봄 기록을 바탕으로 AI가 대신 작성했어요.
-              </p>
-            )}
+            <p className="text-[15px] leading-relaxed italic whitespace-pre-wrap">
+              <span className="text-coral-foreground">“ </span>
+              {report.message}
+              <span className="text-coral-foreground"> ”</span>
+            </p>
+            <p className="text-xs font-bold text-coral-foreground">
+              To. {report.toCaregiverName}
+              <span className="mx-1.5 text-muted-foreground font-normal">·</span>
+              <span className="text-foreground/80 font-semibold">{sentTime}</span>
+            </p>
+          </div>
+        ) : (
+          <div className="rounded-3xl bg-card shadow-card p-5 text-center text-sm text-muted-foreground">
+            아직 도착한 수고 메시지가 없어요
           </div>
         )}
 
-        {/* 요약 */}
+        {/* Tab badge */}
+        <div className="flex items-center gap-3 pt-1">
+          <div className="inline-flex items-center gap-2 rounded-full bg-[#b88761] text-white px-4 py-2 shadow-soft">
+            <MessageCircleHeart size={16} />
+            <span className="text-sm font-bold">메시지</span>
+          </div>
+          <p className="text-sm font-semibold text-foreground/80">수고 메시지 카드</p>
+        </div>
+        <p className="text-xs text-muted-foreground -mt-2 pl-1">
+          바쁜 양육자도, 따뜻한 마음을 거치지 않도록.
+        </p>
+
+        {/* Session summary (kept, lightweight) */}
         {report && (
           <div className="rounded-3xl bg-card shadow-card p-4">
             <p className="text-[11px] font-bold tracking-wider text-muted-foreground">
               오늘의 돌봄 요약
             </p>
             <p className="font-bold text-sm mt-1">
-              {report.durationLabel} · 기록 {sessionRecords.length}건
+              {report.durationLabel} · 기록 {records.filter((r) => session && new Date(r.at) >= new Date(session.startedAt) && (!session.endedAt || new Date(r.at) <= new Date(session.endedAt))).length}건
             </p>
             <div className="grid grid-cols-4 gap-1 mt-2 text-center text-[11px]">
               <Stat n={report.counts.feeding} label="수유" />
@@ -85,57 +82,20 @@ export function ThankYouReportScreen() {
           </div>
         )}
 
-        {/* 세션 기록 */}
-        <div className="rounded-3xl bg-card shadow-card p-4 space-y-2">
-          <div className="flex items-center gap-1.5">
-            <ClipboardList size={14} className="text-foreground/70" />
-            <p className="font-bold text-sm">오늘 기록한 내용</p>
-          </div>
-          {sessionRecords.length === 0 ? (
-            <p className="text-xs text-muted-foreground py-3 text-center">
-              이번 돌봄에 남긴 기록이 없어요
-            </p>
-          ) : (
-            <ul className="space-y-1.5">
-              {sessionRecords.map((r) => (
-                <li
-                  key={r.id}
-                  className="flex items-start gap-2 rounded-xl bg-cream/70 px-3 py-2"
-                >
-                  <span className="text-[10px] font-bold tracking-wider text-mint-foreground bg-mint/40 px-2 py-0.5 rounded-full mt-0.5 shrink-0">
-                    {formatTime(r.at)}
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-semibold">
-                      {TYPE_LABEL[r.type]}
-                      {r.amountMl ? ` · ${r.amountMl}ml` : ''}
-                    </p>
-                    {r.memo && (
-                      <p className="text-[11px] text-foreground/70 leading-snug">
-                        {r.memo}
-                      </p>
-                    )}
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
+        <div className="space-y-2 pt-2">
+          <button
+            onClick={() => navigate('report')}
+            className="w-full h-13 py-3.5 rounded-2xl bg-primary text-primary-foreground font-semibold shadow-soft"
+          >
+            전체 리포트 보기
+          </button>
+          <button
+            onClick={() => navigate('dashboard')}
+            className="w-full h-12 rounded-2xl bg-card border border-border font-semibold text-sm"
+          >
+            홈으로
+          </button>
         </div>
-      </div>
-
-      <div className="space-y-2 mt-4">
-        <button
-          onClick={() => navigate('report')}
-          className="w-full h-13 py-3.5 rounded-2xl bg-primary text-primary-foreground font-semibold shadow-soft"
-        >
-          전체 리포트 보기
-        </button>
-        <button
-          onClick={() => navigate('dashboard')}
-          className="w-full h-12 rounded-2xl bg-card border border-border font-semibold text-sm"
-        >
-          홈으로
-        </button>
       </div>
     </div>
   );
