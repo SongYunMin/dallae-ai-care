@@ -24,6 +24,7 @@ import { Route as OnboardingParentRouteImport } from './routes/onboarding/parent
 import { Route as InviteTokenRouteImport } from './routes/invite/$token'
 import { Route as ApiThankyouRouteImport } from './routes/api/thankyou'
 import { Route as ApiAgentRouteImport } from './routes/api/agent'
+import { Route as ReportsCareSessionIdIndexRouteImport } from './routes/reports/$careSessionId.index'
 import { Route as ReportsCareSessionIdThankYouRouteImport } from './routes/reports/$careSessionId.thank-you'
 
 const RulesRoute = RulesRouteImport.update({
@@ -101,6 +102,12 @@ const ApiAgentRoute = ApiAgentRouteImport.update({
   path: '/api/agent',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ReportsCareSessionIdIndexRoute =
+  ReportsCareSessionIdIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => ReportsCareSessionIdRoute,
+  } as any)
 const ReportsCareSessionIdThankYouRoute =
   ReportsCareSessionIdThankYouRouteImport.update({
     id: '/thank-you',
@@ -125,6 +132,7 @@ export interface FileRoutesByFullPath {
   '/records/new': typeof RecordsNewRoute
   '/reports/$careSessionId': typeof ReportsCareSessionIdRouteWithChildren
   '/reports/$careSessionId/thank-you': typeof ReportsCareSessionIdThankYouRoute
+  '/reports/$careSessionId/': typeof ReportsCareSessionIdIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -141,8 +149,8 @@ export interface FileRoutesByTo {
   '/invite/$token': typeof InviteTokenRoute
   '/onboarding/parent': typeof OnboardingParentRoute
   '/records/new': typeof RecordsNewRoute
-  '/reports/$careSessionId': typeof ReportsCareSessionIdRouteWithChildren
   '/reports/$careSessionId/thank-you': typeof ReportsCareSessionIdThankYouRoute
+  '/reports/$careSessionId': typeof ReportsCareSessionIdIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -162,6 +170,7 @@ export interface FileRoutesById {
   '/records/new': typeof RecordsNewRoute
   '/reports/$careSessionId': typeof ReportsCareSessionIdRouteWithChildren
   '/reports/$careSessionId/thank-you': typeof ReportsCareSessionIdThankYouRoute
+  '/reports/$careSessionId/': typeof ReportsCareSessionIdIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -182,6 +191,7 @@ export interface FileRouteTypes {
     | '/records/new'
     | '/reports/$careSessionId'
     | '/reports/$careSessionId/thank-you'
+    | '/reports/$careSessionId/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -198,8 +208,8 @@ export interface FileRouteTypes {
     | '/invite/$token'
     | '/onboarding/parent'
     | '/records/new'
-    | '/reports/$careSessionId'
     | '/reports/$careSessionId/thank-you'
+    | '/reports/$careSessionId'
   id:
     | '__root__'
     | '/'
@@ -218,6 +228,7 @@ export interface FileRouteTypes {
     | '/records/new'
     | '/reports/$careSessionId'
     | '/reports/$careSessionId/thank-you'
+    | '/reports/$careSessionId/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -344,6 +355,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAgentRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/reports/$careSessionId/': {
+      id: '/reports/$careSessionId/'
+      path: '/'
+      fullPath: '/reports/$careSessionId/'
+      preLoaderRoute: typeof ReportsCareSessionIdIndexRouteImport
+      parentRoute: typeof ReportsCareSessionIdRoute
+    }
     '/reports/$careSessionId/thank-you': {
       id: '/reports/$careSessionId/thank-you'
       path: '/thank-you'
@@ -367,10 +385,12 @@ const RecordsRouteWithChildren =
 
 interface ReportsCareSessionIdRouteChildren {
   ReportsCareSessionIdThankYouRoute: typeof ReportsCareSessionIdThankYouRoute
+  ReportsCareSessionIdIndexRoute: typeof ReportsCareSessionIdIndexRoute
 }
 
 const ReportsCareSessionIdRouteChildren: ReportsCareSessionIdRouteChildren = {
   ReportsCareSessionIdThankYouRoute: ReportsCareSessionIdThankYouRoute,
+  ReportsCareSessionIdIndexRoute: ReportsCareSessionIdIndexRoute,
 }
 
 const ReportsCareSessionIdRouteWithChildren =

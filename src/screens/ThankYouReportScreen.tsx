@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useApp } from '@/state/app-state';
-import { IonMascot } from '@/components/IonMascot';
 import { formatTime } from '@/lib/date';
 import { getThankYouReport } from '@/lib/api';
-import type { CareRecord, ThankYouReport } from '@/lib/types';
-import { Heart, ClipboardList, Sparkles } from 'lucide-react';
+import type { CareRecord, CareSession, ThankYouReport } from '@/lib/types';
+import { ClipboardList, MessageCircleHeart, Sparkles } from 'lucide-react';
+import heroImg from '@/assets/thankyou-hero.png';
 
 const TYPE_LABEL: Record<CareRecord['type'], string> = {
   FEEDING: '수유',
@@ -16,81 +16,107 @@ const TYPE_LABEL: Record<CareRecord['type'], string> = {
   NOTE: '메모',
 };
 
+function collectSessionRecords(
+  records: CareRecord[],
+  targetSessionId?: string,
+  session?: CareSession | null,
+) {
+  if (!targetSessionId) return [];
+
+  return records
+    .filter((record) => {
+      if (record.careSessionId || !session || session.id !== targetSessionId) {
+        return record.careSessionId === targetSessionId;
+      }
+
+      // 과거 목 데이터처럼 careSessionId가 없는 기록은 세션 시간 범위로 보정한다.
+      const recordedAt = new Date(record.recordedAt).getTime();
+      return (
+        recordedAt >= new Date(session.startedAt).getTime() &&
+        (!session.endedAt || recordedAt <= new Date(session.endedAt).getTime())
+      );
+    })
+    .sort((a, b) => new Date(a.recordedAt).getTime() - new Date(b.recordedAt).getTime());
+}
+
 export function ThankYouReportScreen() {
   const { payload, lastEndedSession, records, thankYouReports, navigate } = useApp();
   const routeSessionId = (payload as { careSessionId?: string } | null)?.careSessionId;
   const session = lastEndedSession;
-  const targetSessionId = routeSessionId ?? session?.id;
+  const targetSessionId = routeSessionId && routeSessionId !== 'latest' ? routeSessionId : session?.id;
   const localReport = targetSessionId
-    ? thankYouReports.find((r) => r.sessionId === targetSessionId)
+    ? thankYouReports.find((report) => report.sessionId === targetSessionId)
     : thankYouReports[0];
   const [loadedReport, setLoadedReport] = useState<ThankYouReport | null>(null);
 
   useEffect(() => {
     setLoadedReport(null);
     if (!targetSessionId || localReport) return;
+
+    // 공유 링크나 새로고침으로 직접 진입한 경우 로컬 상태에 없는 리포트를 API에서 보강한다.
     void getThankYouReport(targetSessionId).then((loaded) => {
       if (loaded) setLoadedReport(loaded);
     });
   }, [localReport, targetSessionId]);
 
   const report = localReport ?? loadedReport;
-
-  const sessionRecords = targetSessionId
-    ? records
-        .filter((r) => {
-          if (r.careSessionId || !session || session.id !== targetSessionId) return r.careSessionId === targetSessionId;
-          const recordedAt = new Date(r.recordedAt).getTime();
-          return (
-            recordedAt >= new Date(session.startedAt).getTime() &&
-            (!session.endedAt || recordedAt <= new Date(session.endedAt).getTime())
-          );
-        })
-        .sort((a, b) => new Date(a.recordedAt).getTime() - new Date(b.recordedAt).getTime())
-    : [];
-
-  const aiGenerated = report?.fromUserName.includes('AI');
+  const reportSessionId = report?.sessionId ?? targetSessionId;
+  const reportRouteId = reportSessionId ?? 'latest';
+  const sessionRecords = collectSessionRecords(records, reportSessionId, session);
+  const sentTime = report ? formatTime(report.sentAt) : '';
+  const aiGenerated = !!report?.fromUserName.includes('AI');
 
   return (
-    <div className="flex flex-col px-5 pt-8 pb-8 gradient-hero min-h-dvh">
-      <div className="flex-1 space-y-4">
-        <div className="text-center space-y-2">
-          <IonMascot variant="wink" size={120} className="mx-auto" />
-          <h1 className="text-xl font-bold leading-snug">
-            오늘 돌봄을 마쳤어요<br />
-            <span className="text-primary">부모님이 감사 인사</span>를 보냈어요
-          </h1>
-          <p className="text-xs text-muted-foreground">
-            {report?.durationLabel ?? ''} 동안 돌봐주셔서 감사합니다
-          </p>
-        </div>
+    <div className="flex flex-col min-h-dvh bg-cream">
+      {/* 수고 리포트의 첫인상은 i-on-ui 브랜치의 전용 일러스트를 사용한다. */}
+      <div className="relative">
+        <img
+          src={heroImg}
+          alt="수고 리포트 일러스트"
+          className="w-full h-auto block select-none"
+          draggable={false}
+        />
+      </div>
 
-        {/* 부모님이 보낸 감사 메시지 */}
-        {report && (
-          <div className="rounded-3xl bg-card shadow-card p-5 space-y-3 border-2 border-coral/30">
-            <div className="flex items-center gap-1.5">
-              <Heart size={14} className="text-coral-foreground" fill="currentColor" />
-              <p className="text-[11px] font-bold tracking-wider text-coral-foreground">
-                부모님의 감사 메시지
-              </p>
+      <div className="flex-1 px-5 -mt-6 pb-8 space-y-4">
+        {report ? (
+          <div className="rounded-3xl bg-card shadow-card p-5 space-y-3">
+            <p className="text-xs text-muted-foreground">
+              From. <span className="text-foreground font-semibold">{report.fromUserName}</span>
               {aiGenerated && (
-                <span className="ml-auto text-[10px] font-bold tracking-wider bg-mint/50 text-mint-foreground px-2 py-0.5 rounded-full flex items-center gap-1">
+                <span className="ml-2 inline-flex items-center gap-1 text-[10px] font-bold tracking-wider bg-mint/50 text-mint-foreground px-2 py-0.5 rounded-full align-middle">
                   <Sparkles size={9} /> AI 작성
                 </span>
               )}
-            </div>
-            <p className="text-sm leading-relaxed whitespace-pre-wrap">
-              {report.message}
             </p>
-            {aiGenerated && (
-              <p className="text-[10px] text-muted-foreground leading-relaxed pt-1 border-t border-border">
-                부모님이 작성한 메시지가 없어 오늘 돌봄 기록을 바탕으로 AI가 대신 작성했어요.
-              </p>
-            )}
+            <p className="text-[15px] leading-relaxed italic whitespace-pre-wrap">
+              <span className="text-coral-foreground">“ </span>
+              {report.message}
+              <span className="text-coral-foreground"> ”</span>
+            </p>
+            <p className="text-xs font-bold text-coral-foreground">
+              To. {report.toCaregiverName}
+              <span className="mx-1.5 text-muted-foreground font-normal">·</span>
+              <span className="text-foreground/80 font-semibold">{sentTime}</span>
+            </p>
+          </div>
+        ) : (
+          <div className="rounded-3xl bg-card shadow-card p-5 text-center text-sm text-muted-foreground">
+            아직 도착한 수고 메시지가 없어요
           </div>
         )}
 
-        {/* 요약 */}
+        <div className="flex items-center gap-3 pt-1">
+          <div className="inline-flex items-center gap-2 rounded-full bg-[#b88761] text-white px-4 py-2 shadow-soft">
+            <MessageCircleHeart size={16} />
+            <span className="text-sm font-bold">메시지</span>
+          </div>
+          <p className="text-sm font-semibold text-foreground/80">수고 메시지 카드</p>
+        </div>
+        <p className="text-xs text-muted-foreground -mt-2 pl-1">
+          바쁜 양육자도, 따뜻한 마음을 거치지 않도록.
+        </p>
+
         {report && (
           <div className="rounded-3xl bg-card shadow-card p-4">
             <p className="text-[11px] font-bold tracking-wider text-muted-foreground">
@@ -108,7 +134,6 @@ export function ThankYouReportScreen() {
           </div>
         )}
 
-        {/* 세션 기록 */}
         <div className="rounded-3xl bg-card shadow-card p-4 space-y-2">
           <div className="flex items-center gap-1.5">
             <ClipboardList size={14} className="text-foreground/70" />
@@ -120,22 +145,22 @@ export function ThankYouReportScreen() {
             </p>
           ) : (
             <ul className="space-y-1.5">
-              {sessionRecords.map((r) => (
+              {sessionRecords.map((record) => (
                 <li
-                  key={r.id}
+                  key={record.id}
                   className="flex items-start gap-2 rounded-xl bg-cream/70 px-3 py-2"
                 >
                   <span className="text-[10px] font-bold tracking-wider text-mint-foreground bg-mint/40 px-2 py-0.5 rounded-full mt-0.5 shrink-0">
-                    {formatTime(r.recordedAt)}
+                    {formatTime(record.recordedAt)}
                   </span>
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-semibold">
-                      {TYPE_LABEL[r.type]}
-                      {r.amountMl ? ` · ${r.amountMl}ml` : ''}
+                      {TYPE_LABEL[record.type]}
+                      {record.amountMl ? ` · ${record.amountMl}ml` : ''}
                     </p>
-                    {r.memo && (
+                    {record.memo && (
                       <p className="text-[11px] text-foreground/70 leading-snug">
-                        {r.memo}
+                        {record.memo}
                       </p>
                     )}
                   </div>
@@ -144,21 +169,21 @@ export function ThankYouReportScreen() {
             </ul>
           )}
         </div>
-      </div>
 
-      <div className="space-y-2 mt-4">
-        <button
-          onClick={() => navigate('report', { careSessionId: targetSessionId ?? 'latest' })}
-          className="w-full h-13 py-3.5 rounded-2xl bg-primary text-primary-foreground font-semibold shadow-soft"
-        >
-          전체 리포트 보기
-        </button>
-        <button
-          onClick={() => navigate('dashboard')}
-          className="w-full h-12 rounded-2xl bg-card border border-border font-semibold text-sm"
-        >
-          홈으로
-        </button>
+        <div className="space-y-2 pt-2">
+          <button
+            onClick={() => navigate('report', { careSessionId: reportRouteId })}
+            className="w-full h-13 py-3.5 rounded-2xl bg-primary text-primary-foreground font-semibold shadow-soft"
+          >
+            전체 리포트 보기
+          </button>
+          <button
+            onClick={() => navigate('dashboard')}
+            className="w-full h-12 rounded-2xl bg-card border border-border font-semibold text-sm"
+          >
+            홈으로
+          </button>
+        </div>
       </div>
     </div>
   );
