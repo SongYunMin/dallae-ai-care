@@ -1,25 +1,38 @@
-import { useEffect, useMemo, useState } from 'react';
-import { useApp } from '@/state/app-state';
-import { IonMascot } from '@/components/IonMascot';
-import { DEFAULT_RULES, QUICK_CAREGIVER_QUESTIONS } from '@/lib/mock-data';
-import { createCareRecord, endCareSession, parseTextToRecord, startCareSession } from '@/lib/api';
-import { formatDuration, formatTime, formatRelative } from '@/lib/date';
-import { itemDateTime, todayKey, formatItemTime } from '@/lib/checklist';
-import type { CareRecord, CareRecordType, ChecklistItem } from '@/lib/types';
-import { Mic, Send, Sparkles, MessageCircle, TrendingUp, ClipboardList, ChevronDown } from 'lucide-react';
+import { useEffect, useMemo, useState } from "react";
+import { useApp } from "@/state/app-state";
+import { IonMascot } from "@/components/IonMascot";
+import { DEFAULT_RULES } from "@/lib/mock-data";
+import { createCareRecord, endCareSession, parseTextToRecord, startCareSession } from "@/lib/api";
+import { formatDuration, formatTime } from "@/lib/date";
+import { itemDateTime, todayKey, formatItemTime } from "@/lib/checklist";
+import type { CareRecord, CareRecordType, ChecklistItem } from "@/lib/types";
+import { Mic, Send } from "lucide-react";
 
 const quick: { type: CareRecordType; label: string }[] = [
-  { type: 'FEEDING', label: '분유 먹였어요' },
-  { type: 'DIAPER', label: '기저귀 갈았어요' },
-  { type: 'SLEEP_START', label: '낮잠 시작' },
-  { type: 'SLEEP_END', label: '낮잠 종료' },
-  { type: 'MEDICINE', label: '약 먹였어요' },
-  { type: 'CRYING', label: '울었어요' },
+  { type: "FEEDING", label: "분유 먹였어요" },
+  { type: "DIAPER", label: "기저귀 갈았어요" },
+  { type: "SLEEP_START", label: "낮잠 시작" },
+  { type: "SLEEP_END", label: "낮잠 종료" },
+  { type: "MEDICINE", label: "약 먹였어요" },
+  { type: "CRYING", label: "울었어요" },
 ];
 
 export function CareModeScreen() {
-  const { session, startSession, endSession, addRecord, addThankYouReport, parentThankYouMessage, child, currentUser, toast, navigate, records, checklist } = useApp();
-  const [text, setText] = useState('');
+  const {
+    session,
+    startSession,
+    endSession,
+    addRecord,
+    addThankYouReport,
+    parentThankYouMessage,
+    child,
+    currentUser,
+    toast,
+    navigate,
+    records,
+    checklist,
+  } = useApp();
+  const [text, setText] = useState("");
   const [tick, setTick] = useState(0);
 
   useEffect(() => {
@@ -39,7 +52,9 @@ export function CareModeScreen() {
 
         <div className="rounded-3xl gradient-hero p-5 flex flex-col items-center text-center gap-3 shadow-card">
           <IonMascot variant="basic" size={120} />
-          <p className="font-bold">{child.name} · {child.ageInMonths}개월</p>
+          <p className="font-bold">
+            {child.name} · {child.ageInMonths}개월
+          </p>
           <p className="text-xs text-muted-foreground leading-relaxed">
             돌봄을 시작하면 빠른 기록, 음성 기록,
             <br />
@@ -67,9 +82,9 @@ export function CareModeScreen() {
               caregiverId: currentUser.id,
               caregiverName: currentUser.name,
               startedAt: s.startedAt,
-              status: 'ACTIVE',
+              status: "ACTIVE",
             });
-            toast('돌봄을 시작했어요. 안전이 우선이에요.');
+            toast("돌봄을 시작했어요. 안전이 우선이에요.");
           }}
           className="w-full h-14 rounded-2xl bg-primary text-primary-foreground font-semibold shadow-soft"
         >
@@ -80,7 +95,12 @@ export function CareModeScreen() {
   }
 
   const onQuick = async (type: CareRecordType, label: string) => {
-    const r = await createCareRecord({ type, recordedBy: currentUser.name, source: 'MANUAL', memo: label });
+    const r = await createCareRecord({
+      type,
+      recordedBy: currentUser.name,
+      source: "MANUAL",
+      memo: label,
+    });
     addRecord(r);
     toast(`${label} · 기록했어요`);
   };
@@ -93,11 +113,11 @@ export function CareModeScreen() {
       amountMl: parsed.amountMl,
       memo: text,
       recordedBy: currentUser.name,
-      source: 'VOICE',
+      source: "VOICE",
     });
     addRecord(r);
-    toast('음성 기록을 저장했어요');
-    setText('');
+    toast("음성 기록을 저장했어요");
+    setText("");
   };
 
   return (
@@ -105,7 +125,9 @@ export function CareModeScreen() {
       <header className="px-5 pt-8 pb-4 gradient-mint">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-[11px] font-bold tracking-wider text-mint-foreground">돌봄 진행 중</p>
+            <p className="text-[11px] font-bold tracking-wider text-mint-foreground">
+              돌봄 진행 중
+            </p>
             <h1 className="text-xl font-bold mt-0.5">{session.caregiverName}님이 돌보는 중</h1>
             <p className="text-xs text-muted-foreground mt-1">
               시작 {formatTime(session.startedAt)} · {formatDuration(session.startedAt)} 경과
@@ -117,15 +139,6 @@ export function CareModeScreen() {
 
       <div className="px-4 pt-4 space-y-3">
         <BabyStatusCard records={records} checklist={checklist} />
-
-        <div className="rounded-3xl bg-mint/30 border border-mint/50 p-4">
-          <p className="text-[11px] font-bold tracking-wider text-mint-foreground">꼭 지킬 가족 규칙</p>
-          <div className="mt-1.5 space-y-1">
-            {DEFAULT_RULES.map((r) => (
-              <p key={r} className="text-xs leading-snug">• {r}</p>
-            ))}
-          </div>
-        </div>
 
         <div className="rounded-3xl bg-card shadow-card p-4">
           <p className="font-bold text-sm mb-2">빠른 기록</p>
@@ -149,7 +162,7 @@ export function CareModeScreen() {
           </div>
           <div className="flex items-center gap-2">
             <button
-              onClick={() => toast('음성 인식은 데모에서 텍스트로 입력해요')}
+              onClick={() => toast("음성 인식은 데모에서 텍스트로 입력해요")}
               className="h-12 w-12 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-soft shrink-0"
             >
               <Mic size={20} />
@@ -169,24 +182,25 @@ export function CareModeScreen() {
           </div>
         </div>
 
-        <AgentHelperPanel />
-
-
         {session.caregiverId === currentUser.id ? (
           <button
             onClick={async () => {
-              if (typeof window !== 'undefined' && !window.confirm('돌봄을 종료할까요? 부모님께 감사 메시지가 전달돼요.')) return;
+              if (
+                typeof window !== "undefined" &&
+                !window.confirm("돌봄을 종료할까요? 부모님께 감사 메시지가 전달돼요.")
+              )
+                return;
               const ended = endSession();
               if (!ended) return;
               const sessionRecords = records.filter(
                 (r) => new Date(r.at).getTime() >= new Date(ended.startedAt).getTime(),
               );
               const counts = {
-                feeding: sessionRecords.filter((r) => r.type === 'FEEDING').length,
-                diaper: sessionRecords.filter((r) => r.type === 'DIAPER').length,
-                sleep: sessionRecords.filter((r) => r.type.startsWith('SLEEP')).length,
-                medicine: sessionRecords.filter((r) => r.type === 'MEDICINE').length,
-                voiceNotes: sessionRecords.filter((r) => r.source === 'VOICE').length,
+                feeding: sessionRecords.filter((r) => r.type === "FEEDING").length,
+                diaper: sessionRecords.filter((r) => r.type === "DIAPER").length,
+                sleep: sessionRecords.filter((r) => r.type.startsWith("SLEEP")).length,
+                medicine: sessionRecords.filter((r) => r.type === "MEDICINE").length,
+                voiceNotes: sessionRecords.filter((r) => r.source === "VOICE").length,
               };
               const durationLabel = formatDuration(ended.startedAt, ended.endedAt);
               await endCareSession(ended.id, ended.startedAt, counts);
@@ -196,9 +210,9 @@ export function CareModeScreen() {
               let aiGenerated = false;
               if (!message) {
                 try {
-                  const res = await fetch('/api/thankyou', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                  const res = await fetch("/api/thankyou", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
                       caregiverName: ended.caregiverName,
                       childName: child.name,
@@ -228,8 +242,8 @@ export function CareModeScreen() {
               addThankYouReport({
                 id: `thx_${Date.now().toString(36)}`,
                 sessionId: ended.id,
-                fromUserId: 'user_parent_1',
-                fromUserName: aiGenerated ? '부모님 (AI 작성)' : '부모님',
+                fromUserId: "user_parent_1",
+                fromUserName: aiGenerated ? "부모님 (AI 작성)" : "부모님",
                 toCaregiverName: ended.caregiverName,
                 message,
                 durationLabel,
@@ -241,7 +255,7 @@ export function CareModeScreen() {
                 },
                 sentAt: new Date().toISOString(),
               });
-              navigate('thankYouReport');
+              navigate("thankYouReport");
             }}
             className="w-full h-14 rounded-2xl bg-coral text-coral-foreground font-semibold shadow-soft"
           >
@@ -257,95 +271,34 @@ export function CareModeScreen() {
             </p>
           </div>
         )}
-      </div>
-    </div>
-  );
-}
 
-function AgentHelperPanel() {
-  const { navigate, setPendingChatQuestion, notifications, child } = useApp();
-  const topTip =
-    notifications.find((n) => n.status === 'UNREAD' && n.type === 'CARE_PATTERN') ??
-    notifications.find((n) => n.status === 'UNREAD');
-
-  const askIon = (q: string) => {
-    setPendingChatQuestion(q);
-    navigate('chat');
-  };
-
-  return (
-    <div className="rounded-3xl gradient-mint shadow-card p-4 space-y-3 relative overflow-hidden">
-      <div className="absolute -right-3 -bottom-3 opacity-15 pointer-events-none">
-        <IonMascot variant="basic" size={120} />
-      </div>
-      <div className="relative flex items-center gap-2">
-        <span className="text-[10px] font-bold tracking-wider bg-foreground/85 text-background px-2 py-0.5 rounded-full flex items-center gap-1">
-          <Sparkles size={10} /> 아이온이 옆에서 도와드려요
-        </span>
-      </div>
-
-      {topTip && (
-        <div className="relative rounded-2xl bg-card/90 backdrop-blur p-3 space-y-1.5">
-          <div className="flex items-center gap-1.5">
-            <TrendingUp size={12} className="text-mint-foreground" />
-            <p className="text-[10px] font-bold tracking-wider text-mint-foreground">
-              지금 봐주세요
-            </p>
+        <div className="rounded-3xl bg-mint/30 border border-mint/50 p-4">
+          <p className="text-[11px] font-bold tracking-wider text-mint-foreground">
+            꼭 지킬 가족 규칙
+          </p>
+          <div className="mt-1.5 space-y-1">
+            {DEFAULT_RULES.map((r) => (
+              <p key={r} className="text-xs leading-snug">
+                • {r}
+              </p>
+            ))}
           </div>
-          <p className="text-sm font-bold leading-snug">{topTip.title}</p>
-          <p className="text-[11px] text-foreground/75 leading-relaxed">{topTip.message}</p>
-          {topTip.evidence && (
-            <p className="text-[10px] text-muted-foreground flex items-start gap-1 pt-0.5">
-              <ClipboardList size={10} className="mt-0.5 shrink-0" />
-              {topTip.evidence}
-            </p>
-          )}
-        </div>
-      )}
-
-      <div className="relative space-y-2">
-        <p className="text-[11px] font-bold text-foreground/70">
-          {child.name}이 기록을 바탕으로 빠르게 물어보세요
-        </p>
-        <div className="flex flex-wrap gap-1.5">
-          {QUICK_CAREGIVER_QUESTIONS.map((q) => (
-            <button
-              key={q}
-              onClick={() => askIon(q)}
-              className="text-[12px] px-3 py-1.5 rounded-full bg-card/90 border border-border shadow-card font-medium active:scale-95 transition-transform"
-            >
-              {q}
-            </button>
-          ))}
         </div>
       </div>
-
-      <button
-        onClick={() => navigate('chat')}
-        className="relative w-full h-12 rounded-2xl bg-foreground text-background font-bold text-sm flex items-center justify-center gap-2 shadow-soft active:scale-[0.98] transition-transform"
-      >
-        <MessageCircle size={16} />
-        아이온에게 직접 물어보기
-        <Send size={14} />
-      </button>
     </div>
   );
 }
 
 function whenLabel(targetMs: number): string {
   const diffMin = Math.round((targetMs - Date.now()) / 60000);
-  if (diffMin <= 0) return '지금';
+  if (diffMin <= 0) return "지금";
   if (diffMin < 60) return `${diffMin}분 뒤`;
   const h = Math.floor(diffMin / 60);
   const m = diffMin % 60;
   return m === 0 ? `${h}시간 뒤` : `${h}시간 ${m}분 뒤`;
 }
 
-function lastByType(records: CareRecord[], type: CareRecordType): CareRecord | undefined {
-  return [...records].filter((r) => r.type === type).sort((a, b) => b.at.localeCompare(a.at))[0];
-}
-
-function nextOfKind(checklist: ChecklistItem[], kind: ChecklistItem['kind']): ChecklistItem | null {
+function nextOfKind(checklist: ChecklistItem[], kind: ChecklistItem["kind"]): ChecklistItem | null {
   const today = todayKey();
   const now = Date.now();
   return (
@@ -359,13 +312,11 @@ function nextOfKind(checklist: ChecklistItem[], kind: ChecklistItem['kind']): Ch
 function StatusTile({
   emoji,
   label,
-  last,
   next,
   tone,
 }: {
   emoji: string;
   label: string;
-  last: string;
   next: ChecklistItem | null;
   tone: string;
 }) {
@@ -374,11 +325,11 @@ function StatusTile({
       <p className="text-[11px] font-bold tracking-wider text-foreground/70">
         {emoji} {label}
       </p>
-      <p className="mt-1 text-[10px] text-muted-foreground">마지막</p>
-      <p className="text-sm font-bold leading-tight">{last}</p>
-      <p className="mt-1.5 text-[10px] text-muted-foreground">다음</p>
+      <p className="mt-1.5 text-[10px] text-muted-foreground">해야할 일</p>
       <p className="text-sm font-bold leading-tight">
-        {next ? `${formatItemTime(next.time)} · ${whenLabel(itemDateTime(next).getTime())}` : '예정 없음'}
+        {next
+          ? `${formatItemTime(next.time)} · ${whenLabel(itemDateTime(next).getTime())}`
+          : "예정 없음"}
       </p>
     </div>
   );
@@ -391,85 +342,24 @@ function BabyStatusCard({
   records: CareRecord[];
   checklist: ChecklistItem[];
 }) {
-  const [open, setOpen] = useState(false);
   const [, setTick] = useState(0);
   useEffect(() => {
     const t = setInterval(() => setTick((x) => x + 1), 60000);
     return () => clearInterval(t);
   }, []);
 
-  const lastFeed = lastByType(records, 'FEEDING');
-  const lastSleepEnd = lastByType(records, 'SLEEP_END');
-  const lastSleepStart = lastByType(records, 'SLEEP_START');
-  const lastSleep = lastSleepEnd ?? lastSleepStart;
-  const lastDiaper = lastByType(records, 'DIAPER');
-  const lastMed = lastByType(records, 'MEDICINE');
+  void records;
 
-  const nextFeed = useMemo(() => nextOfKind(checklist, 'FEEDING'), [checklist]);
-  const nextSleep = useMemo(() => nextOfKind(checklist, 'SLEEP'), [checklist]);
+  const nextFeed = useMemo(() => nextOfKind(checklist, "FEEDING"), [checklist]);
+  const nextSleep = useMemo(() => nextOfKind(checklist, "SLEEP"), [checklist]);
 
   return (
     <div className="rounded-3xl bg-card shadow-card p-4">
-      <p className="font-bold text-sm mb-2">아이 현재 상태</p>
+      <p className="font-bold text-sm mb-2">다음 할 일</p>
       <div className="grid grid-cols-2 gap-2">
-        <StatusTile
-          emoji="🍼"
-          label="밥"
-          tone="bg-cream"
-          last={
-            lastFeed
-              ? `${formatTime(lastFeed.at)}${lastFeed.amountMl ? ` · ${lastFeed.amountMl}ml` : ''}`
-              : '기록 없음'
-          }
-          next={nextFeed}
-        />
-        <StatusTile
-          emoji="😴"
-          label="잠"
-          tone="bg-sky/40"
-          last={
-            lastSleep
-              ? `${formatTime(lastSleep.at)} ${lastSleep.type === 'SLEEP_END' ? '종료' : '시작'}`
-              : '기록 없음'
-          }
-          next={nextSleep}
-        />
+        <StatusTile emoji="🍼" label="밥" tone="bg-cream" next={nextFeed} />
+        <StatusTile emoji="😴" label="잠" tone="bg-sky/40" next={nextSleep} />
       </div>
-
-      <button
-        onClick={() => setOpen((v) => !v)}
-        className="mt-3 w-full flex items-center justify-between text-xs font-semibold text-foreground/80 active:scale-[0.99] transition-transform"
-      >
-        <span>기저귀 · 약 마지막 상태 보기</span>
-        <ChevronDown size={16} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
-      </button>
-
-      {open && (
-        <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
-          <div className="rounded-xl bg-mint/40 p-2">
-            기저귀<br />
-            <span className="font-bold text-sm">
-              {lastDiaper ? formatTime(lastDiaper.at) : '기록 없음'}
-            </span>
-            {lastDiaper && (
-              <span className="block text-[10px] text-muted-foreground mt-0.5">
-                {formatRelative(lastDiaper.at)}
-              </span>
-            )}
-          </div>
-          <div className="rounded-xl bg-coral/30 p-2">
-            약<br />
-            <span className="font-bold text-sm">
-              {lastMed ? formatTime(lastMed.at) : '기록 없음'}
-            </span>
-            {lastMed && (
-              <span className="block text-[10px] text-muted-foreground mt-0.5">
-                {formatRelative(lastMed.at)}
-              </span>
-            )}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
