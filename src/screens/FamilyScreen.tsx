@@ -12,7 +12,7 @@ const roleLabel: Record<UserRole, string> = {
 };
 
 export function FamilyScreen() {
-  const { familyMembers, invite, setInvite, toast, navigate } = useApp();
+  const { familyMembers, invite, setInvite, toast, navigate, currentUser, logout } = useApp();
   const [relationship, setRelationship] = useState('할머니');
   const [role, setRole] = useState<UserRole>('CAREGIVER_EDITOR');
 
