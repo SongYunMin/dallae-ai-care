@@ -8,10 +8,7 @@ export function RulesScreen() {
   const [text, setText] = useState('');
   return (
     <div className="flex flex-col">
-      <header className="px-4 pt-7 pb-3 flex items-center gap-2">
-        <button onClick={() => navigate('dashboard')} className="p-2 -ml-2 text-muted-foreground">
-          <ChevronLeft size={24} />
-        </button>
+      <header className="px-4 pt-7 pb-3 flex items-center gap-2 pl-16">
         <h1 className="text-lg font-bold">우리 가족 규칙</h1>
       </header>
       <div className="px-4 space-y-3">
