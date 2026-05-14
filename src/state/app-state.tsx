@@ -114,6 +114,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [checklist, setChecklist] = useState<ChecklistItem[]>(() => makeMockChecklist('user_parent_1'));
   const [thankYouReports, setThankYouReports] = useState<ThankYouReport[]>([]);
   const [parentThankYouMessage, setParentThankYouMessage] = useState<string>('');
+  const [childMood, setChildMoodState] = useState<{ emoji: string; label: string; at: string } | null>(null);
 
   const navigate = useCallback((s: Screen, p?: unknown) => {
     setPayload(p ?? null);
