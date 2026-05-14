@@ -1,26 +1,81 @@
-import { useEffect, useRef, useState } from 'react';
-import { useApp } from '@/state/app-state';
-import { IonMascot } from '@/components/IonMascot';
-import { askAgentChat } from '@/lib/api';
-import { CHAT_SUGGESTIONS } from '@/lib/mock-data';
-import type { AgentCareResponse, ChatMessage } from '@/lib/types';
-import { Send, Sparkles, AlertTriangle, ListChecks, ShieldCheck, NotebookPen } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useApp } from "@/state/app-state";
+import { IonMascot } from "@/components/IonMascot";
+import { CHAT_SUGGESTIONS, DEFAULT_RULES } from "@/lib/mock-data";
+import { Send, ShieldCheck } from "lucide-react";
+import { useChat } from "@ai-sdk/react";
+import { DefaultChatTransport, type UIMessage } from "ai";
 
 export function ChatScreen() {
-  const { chatMessages, addChatMessage, currentUser, child, pendingChatQuestion, setPendingChatQuestion } = useApp();
-  const [text, setText] = useState('');
-  const [loading, setLoading] = useState(false);
+  const {
+    currentUser,
+    child,
+    pendingChatQuestion,
+    setPendingChatQuestion,
+    records,
+    checklist,
+    parentRules,
+    childMood,
+    notifications,
+    session,
+  } = useApp();
+  const [text, setText] = useState("");
   const scrollerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const context = useMemo(() => {
+    const recent = records.slice(0, 20).map((r) => ({
+      type: r.type,
+      at: r.at,
+      memo: r.memo,
+      amountMl: r.amountMl,
+      by: r.recordedBy,
+    }));
+    const todayChecklist = checklist.slice(0, 30).map((c) => ({
+      date: c.date,
+      time: c.time,
+      label: c.label,
+      kind: c.kind,
+      done: c.completed,
+    }));
+    return {
+      child: { name: child.name, ageMonths: child.ageInMonths, feedingType: child.feedingType },
+      currentUser: { name: currentUser.name, role: currentUser.role },
+      session: session
+        ? { caregiver: session.caregiverName, startedAt: session.startedAt }
+        : null,
+      childMood,
+      familyRules: [...DEFAULT_RULES, ...parentRules],
+      recentRecords: recent,
+      checklist: todayChecklist,
+      recentNotifications: notifications.slice(0, 5).map((n) => ({
+        title: n.title,
+        message: n.message,
+      })),
+      now: new Date().toISOString(),
+    };
+  }, [records, checklist, parentRules, child, currentUser, session, childMood, notifications]);
+
+  const transport = useMemo(
+    () =>
+      new DefaultChatTransport({
+        api: "/api/chat",
+        body: () => ({ context }),
+      }),
+    [context],
+  );
+
+  const { messages, sendMessage, status, error } = useChat({
+    id: "ion-chat",
+    transport,
+  });
 
   const send = async (q: string) => {
-    if (!q.trim()) return;
-    const userMsg: ChatMessage = { id: 'u' + Date.now(), role: 'user', text: q, at: new Date().toISOString() };
-    addChatMessage(userMsg);
-    setText('');
-    setLoading(true);
-    const r = await askAgentChat(q);
-    addChatMessage({ id: 'a' + Date.now(), role: 'agent', response: r, at: new Date().toISOString() });
-    setLoading(false);
+    const trimmed = q.trim();
+    if (!trimmed || status === "submitted" || status === "streaming") return;
+    setText("");
+    await sendMessage({ text: trimmed });
+    inputRef.current?.focus();
   };
 
   useEffect(() => {
@@ -32,8 +87,17 @@ export function ChatScreen() {
   }, [pendingChatQuestion]);
 
   useEffect(() => {
-    scrollerRef.current?.scrollTo({ top: scrollerRef.current.scrollHeight, behavior: 'smooth' });
-  }, [chatMessages, loading]);
+    scrollerRef.current?.scrollTo({
+      top: scrollerRef.current.scrollHeight,
+      behavior: "smooth",
+    });
+  }, [messages, status]);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
+
+  const isLoading = status === "submitted" || status === "streaming";
 
   return (
     <div className="flex flex-col h-full min-h-0">
@@ -45,47 +109,46 @@ export function ChatScreen() {
           <div>
             <h1 className="text-base font-bold">아이온 AI 돌봄 챗봇</h1>
             <p className="text-[11px] text-muted-foreground">
-              {child.name}이의 기록과 가족 규칙을 보고 답해요
+              {child.name}이의 모든 기록·규칙·감정을 보고 답해요
             </p>
           </div>
         </div>
         <div className="mt-3 rounded-2xl bg-card/80 backdrop-blur p-3 text-xs space-y-0.5">
-          <div className="flex items-center gap-1.5 mb-1">
-            <span className="text-[9px] font-bold tracking-wider bg-foreground/85 text-background px-1.5 py-0.5 rounded-full">
-              지금 보고 있는 기록
-            </span>
-          </div>
-          <p className="font-bold">{child.name} · {child.ageInMonths}개월</p>
-          <p className="text-muted-foreground">마지막 수유: 오후 2:20 / 160ml</p>
-          <p className="text-muted-foreground">마지막 낮잠 종료: 오후 12:00</p>
-          <p className="text-muted-foreground">현재 돌보는 사람: {currentUser.name}</p>
+          <p className="font-bold">
+            {child.name} · {child.ageInMonths}개월
+          </p>
+          <p className="text-muted-foreground">
+            기록 {records.length}건 · 체크리스트 {checklist.length}건 · 규칙{" "}
+            {DEFAULT_RULES.length + parentRules.length}개
+            {childMood ? ` · 감정 ${childMood.emoji} ${childMood.label}` : ""}
+          </p>
           <p className="text-mint-foreground font-semibold flex items-center gap-1">
             <ShieldCheck size={12} /> 가족 규칙 반영 중
           </p>
         </div>
       </header>
 
-      <div ref={scrollerRef} className="flex-1 min-h-0 px-4 py-4 space-y-3 overflow-y-auto">
-        {chatMessages.length === 0 && (
+      <div
+        ref={scrollerRef}
+        className="flex-1 min-h-0 px-4 py-4 space-y-3 overflow-y-auto"
+      >
+        {messages.length === 0 && (
           <div className="space-y-4">
             <div className="rounded-2xl bg-mint/30 border border-mint/40 p-3">
               <div className="flex items-start gap-2">
                 <IonMascot variant="wink" size={36} />
                 <div>
-                  <p className="text-xs font-bold">
-                    안녕하세요! {currentUser.name}님,
-                  </p>
+                  <p className="text-xs font-bold">안녕하세요! {currentUser.name}님,</p>
                   <p className="text-[11px] text-foreground/75 mt-0.5 leading-relaxed">
-                    {child.name}이의 모든 기록을 알고 있어요. 돌보면서 궁금한 건
-                    바로 물어보세요. 데이터 기반으로 답해드릴게요.
+                    {child.name}이의 기록과 가족 규칙을 모두 알고 있어요. 무엇이든 자유롭게
+                    물어보세요.
                   </p>
                 </div>
               </div>
             </div>
-
             <div>
               <p className="text-xs font-bold text-foreground/70 px-1 mb-2">
-                💬 돌봄자가 자주 묻는 질문
+                💬 자주 묻는 질문
               </p>
               <div className="flex flex-wrap gap-2">
                 {CHAT_SUGGESTIONS.map((s) => (
@@ -102,19 +165,30 @@ export function ChatScreen() {
           </div>
         )}
 
-        {chatMessages.map((m) =>
-          m.role === 'user' ? (
-            <div key={m.id} className="flex justify-end">
-              <div className="max-w-[80%] rounded-2xl rounded-tr-sm bg-primary text-primary-foreground px-4 py-2.5 text-sm">
-                {m.text}
+        {messages.map((m: UIMessage) => {
+          const text = m.parts
+            .map((p) => (p.type === "text" ? p.text : ""))
+            .join("");
+          if (m.role === "user") {
+            return (
+              <div key={m.id} className="flex justify-end">
+                <div className="max-w-[80%] rounded-2xl rounded-tr-sm bg-primary text-primary-foreground px-4 py-2.5 text-sm whitespace-pre-wrap">
+                  {text}
+                </div>
+              </div>
+            );
+          }
+          return (
+            <div key={m.id} className="flex items-start gap-2">
+              <IonMascot variant="basic" size={32} />
+              <div className="flex-1 max-w-[88%] rounded-2xl rounded-tl-sm bg-card border border-border px-4 py-2.5 text-sm whitespace-pre-wrap leading-relaxed">
+                {text || <span className="text-muted-foreground">...</span>}
               </div>
             </div>
-          ) : (
-            <AgentBubble key={m.id} response={m.response!} />
-          )
-        )}
+          );
+        })}
 
-        {loading && (
+        {isLoading && messages[messages.length - 1]?.role !== "assistant" && (
           <div className="flex items-end gap-2">
             <IonMascot variant="basic" size={32} />
             <div className="rounded-2xl bg-card border border-border px-4 py-3 text-sm text-muted-foreground">
@@ -122,98 +196,39 @@ export function ChatScreen() {
             </div>
           </div>
         )}
+
+        {error && (
+          <div className="rounded-2xl bg-coral/30 border border-coral/50 px-4 py-3 text-xs text-foreground">
+            오류가 발생했어요. 잠시 후 다시 시도해 주세요.
+          </div>
+        )}
       </div>
 
-      <div className="shrink-0 p-3 bg-background/95 backdrop-blur border-t border-border">
+      <div className="shrink-0 p-3 bg-background/95 backdrop-blur border-t border-border safe-bottom">
         <div className="flex items-center gap-2">
           <input
+            ref={inputRef}
             value={text}
             onChange={(e) => setText(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && send(text)}
-            placeholder="아이에 대해 궁금한 점을 물어보세요"
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                send(text);
+              }
+            }}
+            placeholder="아이에 대해 무엇이든 물어보세요"
             className="flex-1 h-12 px-4 rounded-full bg-card border border-border text-sm"
           />
           <button
             onClick={() => send(text)}
-            className="h-12 w-12 rounded-full bg-primary text-primary-foreground flex items-center justify-center"
+            disabled={isLoading || !text.trim()}
+            className="h-12 w-12 rounded-full bg-primary text-primary-foreground flex items-center justify-center disabled:opacity-50"
+            aria-label="전송"
           >
             <Send size={18} />
           </button>
         </div>
       </div>
-    </div>
-  );
-}
-
-function AgentBubble({ response }: { response: AgentCareResponse }) {
-  return (
-    <div className="flex items-start gap-2">
-      <IonMascot variant="basic" size={32} />
-      <div className="flex-1 space-y-2 max-w-[88%]">
-        <Card icon={<Sparkles size={14} />} title="지금 상황" tone="cream">
-          <p className="text-sm leading-relaxed">{response.answer}</p>
-        </Card>
-        {response.nextActions.length > 0 && (
-          <Card icon={<ListChecks size={14} />} title="바로 할 일" tone="mint">
-            <ul className="space-y-1 text-sm">
-              {response.nextActions.map((a) => (
-                <li key={a} className="flex gap-2"><span>•</span><span>{a}</span></li>
-              ))}
-            </ul>
-          </Card>
-        )}
-        {response.ruleReminders.length > 0 && (
-          <Card icon={<ShieldCheck size={14} />} title="가족 규칙" tone="sky">
-            {response.ruleReminders.map((r) => (
-              <p key={r} className="text-sm">• {r}</p>
-            ))}
-          </Card>
-        )}
-        {response.recordSuggestions.length > 0 && (
-          <Card icon={<NotebookPen size={14} />} title="기록하면 좋은 것" tone="warm">
-            {response.recordSuggestions.map((r) => (
-              <p key={r} className="text-sm">• {r}</p>
-            ))}
-          </Card>
-        )}
-        {response.escalation !== 'NONE' && (
-          <Card icon={<AlertTriangle size={14} />} title="확인 필요" tone="coral">
-            <p className="text-sm">
-              {response.escalation === 'ASK_PARENT'
-                ? '보호자에게 바로 확인해 주세요.'
-                : '의료 전문가의 확인이 필요할 수 있어요.'}
-            </p>
-          </Card>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function Card({
-  icon,
-  title,
-  children,
-  tone,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  children: React.ReactNode;
-  tone: 'cream' | 'mint' | 'sky' | 'coral' | 'warm';
-}) {
-  const tones = {
-    cream: 'bg-cream',
-    mint: 'bg-mint/40',
-    sky: 'bg-sky/40',
-    coral: 'bg-coral/40',
-    warm: 'bg-card border border-border',
-  };
-  return (
-    <div className={`rounded-2xl rounded-tl-sm p-3 ${tones[tone]}`}>
-      <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-foreground/70 mb-1">
-        {icon} {title}
-      </div>
-      <div className="text-foreground/90">{children}</div>
     </div>
   );
 }
