@@ -1,25 +1,38 @@
-import { useEffect, useMemo, useState } from 'react';
-import { useApp } from '@/state/app-state';
-import { IonMascot } from '@/components/IonMascot';
-import { DEFAULT_RULES } from '@/lib/mock-data';
-import { createCareRecord, endCareSession, parseTextToRecord, startCareSession } from '@/lib/api';
-import { formatDuration, formatTime } from '@/lib/date';
-import { itemDateTime, todayKey, formatItemTime } from '@/lib/checklist';
-import type { CareRecord, CareRecordType, ChecklistItem } from '@/lib/types';
-import { Mic, Send } from 'lucide-react';
+import { useEffect, useMemo, useState } from "react";
+import { useApp } from "@/state/app-state";
+import { IonMascot } from "@/components/IonMascot";
+import { DEFAULT_RULES } from "@/lib/mock-data";
+import { createCareRecord, endCareSession, parseTextToRecord, startCareSession } from "@/lib/api";
+import { formatDuration, formatTime } from "@/lib/date";
+import { itemDateTime, todayKey, formatItemTime } from "@/lib/checklist";
+import type { CareRecord, CareRecordType, ChecklistItem } from "@/lib/types";
+import { Mic, Send } from "lucide-react";
 
 const quick: { type: CareRecordType; label: string }[] = [
-  { type: 'FEEDING', label: '분유 먹였어요' },
-  { type: 'DIAPER', label: '기저귀 갈았어요' },
-  { type: 'SLEEP_START', label: '낮잠 시작' },
-  { type: 'SLEEP_END', label: '낮잠 종료' },
-  { type: 'MEDICINE', label: '약 먹였어요' },
-  { type: 'CRYING', label: '울었어요' },
+  { type: "FEEDING", label: "분유 먹였어요" },
+  { type: "DIAPER", label: "기저귀 갈았어요" },
+  { type: "SLEEP_START", label: "낮잠 시작" },
+  { type: "SLEEP_END", label: "낮잠 종료" },
+  { type: "MEDICINE", label: "약 먹였어요" },
+  { type: "CRYING", label: "울었어요" },
 ];
 
 export function CareModeScreen() {
-  const { session, startSession, endSession, addRecord, addThankYouReport, parentThankYouMessage, child, currentUser, toast, navigate, records, checklist } = useApp();
-  const [text, setText] = useState('');
+  const {
+    session,
+    startSession,
+    endSession,
+    addRecord,
+    addThankYouReport,
+    parentThankYouMessage,
+    child,
+    currentUser,
+    toast,
+    navigate,
+    records,
+    checklist,
+  } = useApp();
+  const [text, setText] = useState("");
   const [tick, setTick] = useState(0);
 
   useEffect(() => {
@@ -39,7 +52,9 @@ export function CareModeScreen() {
 
         <div className="rounded-3xl gradient-hero p-5 flex flex-col items-center text-center gap-3 shadow-card">
           <IonMascot variant="basic" size={120} />
-          <p className="font-bold">{child.name} · {child.ageInMonths}개월</p>
+          <p className="font-bold">
+            {child.name} · {child.ageInMonths}개월
+          </p>
           <p className="text-xs text-muted-foreground leading-relaxed">
             돌봄을 시작하면 빠른 기록, 음성 기록,
             <br />
@@ -67,9 +82,9 @@ export function CareModeScreen() {
               caregiverId: currentUser.id,
               caregiverName: currentUser.name,
               startedAt: s.startedAt,
-              status: 'ACTIVE',
+              status: "ACTIVE",
             });
-            toast('돌봄을 시작했어요. 안전이 우선이에요.');
+            toast("돌봄을 시작했어요. 안전이 우선이에요.");
           }}
           className="w-full h-14 rounded-2xl bg-primary text-primary-foreground font-semibold shadow-soft"
         >
@@ -80,7 +95,12 @@ export function CareModeScreen() {
   }
 
   const onQuick = async (type: CareRecordType, label: string) => {
-    const r = await createCareRecord({ type, recordedBy: currentUser.name, source: 'MANUAL', memo: label });
+    const r = await createCareRecord({
+      type,
+      recordedBy: currentUser.name,
+      source: "MANUAL",
+      memo: label,
+    });
     addRecord(r);
     toast(`${label} · 기록했어요`);
   };
@@ -93,11 +113,11 @@ export function CareModeScreen() {
       amountMl: parsed.amountMl,
       memo: text,
       recordedBy: currentUser.name,
-      source: 'VOICE',
+      source: "VOICE",
     });
     addRecord(r);
-    toast('음성 기록을 저장했어요');
-    setText('');
+    toast("음성 기록을 저장했어요");
+    setText("");
   };
 
   return (
@@ -105,7 +125,9 @@ export function CareModeScreen() {
       <header className="px-5 pt-8 pb-4 gradient-mint">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-[11px] font-bold tracking-wider text-mint-foreground">돌봄 진행 중</p>
+            <p className="text-[11px] font-bold tracking-wider text-mint-foreground">
+              돌봄 진행 중
+            </p>
             <h1 className="text-xl font-bold mt-0.5">{session.caregiverName}님이 돌보는 중</h1>
             <p className="text-xs text-muted-foreground mt-1">
               시작 {formatTime(session.startedAt)} · {formatDuration(session.startedAt)} 경과
@@ -140,7 +162,7 @@ export function CareModeScreen() {
           </div>
           <div className="flex items-center gap-2">
             <button
-              onClick={() => toast('음성 인식은 데모에서 텍스트로 입력해요')}
+              onClick={() => toast("음성 인식은 데모에서 텍스트로 입력해요")}
               className="h-12 w-12 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-soft shrink-0"
             >
               <Mic size={20} />
@@ -160,22 +182,25 @@ export function CareModeScreen() {
           </div>
         </div>
 
-
         {session.caregiverId === currentUser.id ? (
           <button
             onClick={async () => {
-              if (typeof window !== 'undefined' && !window.confirm('돌봄을 종료할까요? 부모님께 감사 메시지가 전달돼요.')) return;
+              if (
+                typeof window !== "undefined" &&
+                !window.confirm("돌봄을 종료할까요? 부모님께 감사 메시지가 전달돼요.")
+              )
+                return;
               const ended = endSession();
               if (!ended) return;
               const sessionRecords = records.filter(
                 (r) => new Date(r.at).getTime() >= new Date(ended.startedAt).getTime(),
               );
               const counts = {
-                feeding: sessionRecords.filter((r) => r.type === 'FEEDING').length,
-                diaper: sessionRecords.filter((r) => r.type === 'DIAPER').length,
-                sleep: sessionRecords.filter((r) => r.type.startsWith('SLEEP')).length,
-                medicine: sessionRecords.filter((r) => r.type === 'MEDICINE').length,
-                voiceNotes: sessionRecords.filter((r) => r.source === 'VOICE').length,
+                feeding: sessionRecords.filter((r) => r.type === "FEEDING").length,
+                diaper: sessionRecords.filter((r) => r.type === "DIAPER").length,
+                sleep: sessionRecords.filter((r) => r.type.startsWith("SLEEP")).length,
+                medicine: sessionRecords.filter((r) => r.type === "MEDICINE").length,
+                voiceNotes: sessionRecords.filter((r) => r.source === "VOICE").length,
               };
               const durationLabel = formatDuration(ended.startedAt, ended.endedAt);
               await endCareSession(ended.id, ended.startedAt, counts);
@@ -185,9 +210,9 @@ export function CareModeScreen() {
               let aiGenerated = false;
               if (!message) {
                 try {
-                  const res = await fetch('/api/thankyou', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                  const res = await fetch("/api/thankyou", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
                       caregiverName: ended.caregiverName,
                       childName: child.name,
@@ -217,8 +242,8 @@ export function CareModeScreen() {
               addThankYouReport({
                 id: `thx_${Date.now().toString(36)}`,
                 sessionId: ended.id,
-                fromUserId: 'user_parent_1',
-                fromUserName: aiGenerated ? '부모님 (AI 작성)' : '부모님',
+                fromUserId: "user_parent_1",
+                fromUserName: aiGenerated ? "부모님 (AI 작성)" : "부모님",
                 toCaregiverName: ended.caregiverName,
                 message,
                 durationLabel,
@@ -230,7 +255,7 @@ export function CareModeScreen() {
                 },
                 sentAt: new Date().toISOString(),
               });
-              navigate('thankYouReport');
+              navigate("thankYouReport");
             }}
             className="w-full h-14 rounded-2xl bg-coral text-coral-foreground font-semibold shadow-soft"
           >
@@ -248,10 +273,14 @@ export function CareModeScreen() {
         )}
 
         <div className="rounded-3xl bg-mint/30 border border-mint/50 p-4">
-          <p className="text-[11px] font-bold tracking-wider text-mint-foreground">꼭 지킬 가족 규칙</p>
+          <p className="text-[11px] font-bold tracking-wider text-mint-foreground">
+            꼭 지킬 가족 규칙
+          </p>
           <div className="mt-1.5 space-y-1">
             {DEFAULT_RULES.map((r) => (
-              <p key={r} className="text-xs leading-snug">• {r}</p>
+              <p key={r} className="text-xs leading-snug">
+                • {r}
+              </p>
             ))}
           </div>
         </div>
@@ -262,14 +291,14 @@ export function CareModeScreen() {
 
 function whenLabel(targetMs: number): string {
   const diffMin = Math.round((targetMs - Date.now()) / 60000);
-  if (diffMin <= 0) return '지금';
+  if (diffMin <= 0) return "지금";
   if (diffMin < 60) return `${diffMin}분 뒤`;
   const h = Math.floor(diffMin / 60);
   const m = diffMin % 60;
   return m === 0 ? `${h}시간 뒤` : `${h}시간 ${m}분 뒤`;
 }
 
-function nextOfKind(checklist: ChecklistItem[], kind: ChecklistItem['kind']): ChecklistItem | null {
+function nextOfKind(checklist: ChecklistItem[], kind: ChecklistItem["kind"]): ChecklistItem | null {
   const today = todayKey();
   const now = Date.now();
   return (
@@ -298,7 +327,9 @@ function StatusTile({
       </p>
       <p className="mt-1.5 text-[10px] text-muted-foreground">해야할 일</p>
       <p className="text-sm font-bold leading-tight">
-        {next ? `${formatItemTime(next.time)} · ${whenLabel(itemDateTime(next).getTime())}` : '예정 없음'}
+        {next
+          ? `${formatItemTime(next.time)} · ${whenLabel(itemDateTime(next).getTime())}`
+          : "예정 없음"}
       </p>
     </div>
   );
@@ -319,8 +350,8 @@ function BabyStatusCard({
 
   void records;
 
-  const nextFeed = useMemo(() => nextOfKind(checklist, 'FEEDING'), [checklist]);
-  const nextSleep = useMemo(() => nextOfKind(checklist, 'SLEEP'), [checklist]);
+  const nextFeed = useMemo(() => nextOfKind(checklist, "FEEDING"), [checklist]);
+  const nextSleep = useMemo(() => nextOfKind(checklist, "SLEEP"), [checklist]);
 
   return (
     <div className="rounded-3xl bg-card shadow-card p-4">

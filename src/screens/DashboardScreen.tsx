@@ -1,6 +1,6 @@
-import { useApp } from '@/state/app-state';
-import { IonMascot } from '@/components/IonMascot';
-import { DEFAULT_RULES } from '@/lib/mock-data';
+import { useApp } from "@/state/app-state";
+import { IonMascot } from "@/components/IonMascot";
+import { DEFAULT_RULES } from "@/lib/mock-data";
 import {
   Bell,
   MessageCircle,
@@ -12,40 +12,40 @@ import {
   TrendingUp,
   Calendar,
   HeartHandshake as HeartHandshakeIcon,
-} from 'lucide-react';
-import { todayKey } from '@/lib/checklist';
-import type { AgentNotification } from '@/lib/types';
+} from "lucide-react";
+import { todayKey } from "@/lib/checklist";
+import type { AgentNotification } from "@/lib/types";
 
 const NOTI_META: Record<
-  AgentNotification['type'],
+  AgentNotification["type"],
   { label: string; tone: string; icon: typeof Sparkles }
 > = {
-  ROUTINE_SUGGESTION: { label: '루틴 변화', tone: 'bg-sky/60 text-sky-foreground', icon: Clock },
-  MISSED_RECORD: { label: '빠진 기록', tone: 'bg-coral/60 text-coral-foreground', icon: AlertCircle },
-  CARE_PATTERN: { label: '돌봄 패턴', tone: 'bg-mint/70 text-mint-foreground', icon: TrendingUp },
-  RULE_REMINDER: { label: '가족 규칙', tone: 'bg-foreground/85 text-background', icon: ShieldCheck },
-  SCHEDULE: { label: '일정 알림', tone: 'bg-cream text-foreground', icon: Calendar },
-  CARE_TIP: { label: '돌봄 팁', tone: 'bg-cream text-foreground', icon: Sparkles },
-  THANK_YOU: { label: '수고리포트', tone: 'bg-coral/40 text-foreground', icon: HeartHandshakeIcon },
+  ROUTINE_SUGGESTION: { label: "루틴 변화", tone: "bg-sky/60 text-sky-foreground", icon: Clock },
+  MISSED_RECORD: {
+    label: "빠진 기록",
+    tone: "bg-coral/60 text-coral-foreground",
+    icon: AlertCircle,
+  },
+  CARE_PATTERN: { label: "돌봄 패턴", tone: "bg-mint/70 text-mint-foreground", icon: TrendingUp },
+  RULE_REMINDER: {
+    label: "가족 규칙",
+    tone: "bg-foreground/85 text-background",
+    icon: ShieldCheck,
+  },
+  SCHEDULE: { label: "일정 알림", tone: "bg-cream text-foreground", icon: Calendar },
+  CARE_TIP: { label: "돌봄 팁", tone: "bg-cream text-foreground", icon: Sparkles },
+  THANK_YOU: { label: "수고리포트", tone: "bg-coral/40 text-foreground", icon: HeartHandshakeIcon },
 };
 
 export function DashboardScreen() {
-  const {
-    child,
-    records,
-    currentUser,
-    session,
-    notifications,
-    navigate,
-    parentRules,
-    checklist,
-  } = useApp();
+  const { child, records, currentUser, session, notifications, navigate, parentRules, checklist } =
+    useApp();
 
   const today = todayKey();
   const todayItems = checklist.filter((c) => c.date === today);
   const doneCount = todayItems.filter((c) => c.completed).length;
 
-  const unread = notifications.filter((n) => n.status === 'UNREAD');
+  const unread = notifications.filter((n) => n.status === "UNREAD");
   const topNotis = unread.slice(0, 3);
 
   return (
@@ -58,7 +58,7 @@ export function DashboardScreen() {
           </h1>
         </div>
         <button
-          onClick={() => navigate('notifications')}
+          onClick={() => navigate("notifications")}
           aria-label="알림"
           className="relative h-10 w-10 rounded-full bg-card shadow-card border border-border flex items-center justify-center active:scale-95 transition-transform shrink-0"
         >
@@ -98,7 +98,7 @@ export function DashboardScreen() {
               </p>
             </div>
             <button
-              onClick={() => navigate('chat')}
+              onClick={() => navigate("chat")}
               aria-label="아이온에게 물어보기"
               className="h-11 w-11 rounded-2xl bg-foreground text-background flex items-center justify-center shadow-soft active:scale-95 transition-transform shrink-0"
             >
@@ -108,9 +108,7 @@ export function DashboardScreen() {
 
           {/* Top 3 notifications */}
           <div className="relative space-y-2">
-            <p className="text-[11px] font-bold text-foreground/70">
-              ✨ 아이온이 먼저 알려드려요
-            </p>
+            <p className="text-[11px] font-bold text-foreground/70">✨ 아이온이 먼저 알려드려요</p>
             {topNotis.length === 0 ? (
               <div className="rounded-2xl bg-card/70 backdrop-blur px-3 py-3 text-[12px] text-muted-foreground text-center">
                 새로운 알림이 없어요
@@ -123,10 +121,12 @@ export function DashboardScreen() {
                   return (
                     <button
                       key={n.id}
-                      onClick={() => navigate('notifications')}
+                      onClick={() => navigate("notifications")}
                       className="w-full text-left rounded-2xl bg-card/90 backdrop-blur px-3 py-2 flex items-center gap-2 active:scale-[0.99] transition-transform"
                     >
-                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full flex items-center gap-1 shrink-0 ${meta.tone}`}>
+                      <span
+                        className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full flex items-center gap-1 shrink-0 ${meta.tone}`}
+                      >
                         <Icon size={10} />
                       </span>
                       <p className="text-[12px] font-semibold truncate flex-1">{n.title}</p>
@@ -136,7 +136,7 @@ export function DashboardScreen() {
               </div>
             )}
             <button
-              onClick={() => navigate('notifications')}
+              onClick={() => navigate("notifications")}
               className="w-full text-[12px] font-semibold text-foreground/70 flex items-center justify-center gap-1 py-1 active:scale-95 transition-transform"
             >
               + 더보기
@@ -152,9 +152,11 @@ export function DashboardScreen() {
               <IonMascot variant="basic" size={32} />
             </div>
             <div>
-              <p className="font-bold text-sm">{child.name} · {child.ageInMonths}개월</p>
+              <p className="font-bold text-sm">
+                {child.name} · {child.ageInMonths}개월
+              </p>
               <p className="text-[11px] text-muted-foreground">
-                {child.feedingType === 'FORMULA' ? '분유' : '수유'} · 컨디션 좋음
+                {child.feedingType === "FORMULA" ? "분유" : "수유"} · 컨디션 좋음
               </p>
             </div>
           </div>
@@ -165,7 +167,7 @@ export function DashboardScreen() {
           <div className="flex items-center justify-between">
             <h2 className="font-bold text-sm">우리 가족 규칙 (아이온이 함께 지켜요)</h2>
             <button
-              onClick={() => navigate('rules')}
+              onClick={() => navigate("rules")}
               className="text-xs text-primary font-semibold flex items-center"
             >
               관리 <ChevronRight size={14} />
@@ -195,15 +197,15 @@ export function DashboardScreen() {
           </div>
           <div className="grid grid-cols-2 text-center divide-x divide-border">
             <div>
-              <p className="text-xl font-bold text-sky-foreground">{session ? 'ON' : '대기'}</p>
+              <p className="text-xl font-bold text-sky-foreground">{session ? "ON" : "대기"}</p>
               <p className="text-[11px] text-muted-foreground">돌봄 세션</p>
             </div>
             <button
-              onClick={() => navigate('checklist')}
+              onClick={() => navigate("checklist")}
               className="active:scale-95 transition-transform"
             >
               <p className="text-xl font-bold text-mint-foreground">
-                {todayItems.length === 0 ? '-' : `${doneCount}/${todayItems.length}`}
+                {todayItems.length === 0 ? "-" : `${doneCount}/${todayItems.length}`}
               </p>
               <p className="text-[11px] text-muted-foreground flex items-center justify-center gap-0.5">
                 오늘의 돌봄 체크리스트 <ChevronRight size={10} />
