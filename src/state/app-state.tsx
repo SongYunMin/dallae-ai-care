@@ -6,6 +6,7 @@ import type {
   ChatMessage,
   ChecklistItem,
   FamilyMember,
+  ThankYouReport,
   UserRole,
 } from '@/lib/types';
 import {
@@ -30,6 +31,7 @@ export type Screen =
   | 'invite'
   | 'rules'
   | 'report'
+  | 'thankYouReport'
   | 'checklist';
 
 type Toast = { id: string; text: string };
@@ -75,6 +77,9 @@ type AppState = {
   addChecklistItem: (item: Omit<ChecklistItem, 'id' | 'completed' | 'createdBy'>) => void;
   toggleChecklistItem: (id: string) => void;
   removeChecklistItem: (id: string) => void;
+
+  thankYouReports: ThankYouReport[];
+  addThankYouReport: (r: ThankYouReport) => void;
 };
 
 const Ctx = createContext<AppState | null>(null);
@@ -100,6 +105,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [invite, setInvite] = useState<{ token: string; url: string } | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [checklist, setChecklist] = useState<ChecklistItem[]>(() => makeMockChecklist('user_parent_1'));
+  const [thankYouReports, setThankYouReports] = useState<ThankYouReport[]>([]);
 
   const navigate = useCallback((s: Screen, p?: unknown) => {
     setPayload(p ?? null);
@@ -228,6 +234,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
         ),
       ),
     removeChecklistItem: (id) => setChecklist((arr) => arr.filter((it) => it.id !== id)),
+    thankYouReports,
+    addThankYouReport: (r) => {
+      setThankYouReports((arr) => [r, ...arr]);
+      // 수신자 알림함에 푸시 (시뮬레이션)
+      const noti: AgentNotification = {
+        id: `noti_thx_${r.id}`,
+        type: 'THANK_YOU',
+        title: `${r.fromUserName}님이 수고리포트를 보냈어요`,
+        message: r.message,
+        evidence: `${r.durationLabel} 돌봄 · 수유 ${r.counts.feeding}회 · 기저귀 ${r.counts.diaper}회 · 낮잠 ${r.counts.sleep}회`,
+        priority: 'MEDIUM',
+        status: 'UNREAD',
+        createdAt: r.sentAt,
+      };
+      setNotifications((arr) => [noti, ...arr]);
+    },
   };
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
