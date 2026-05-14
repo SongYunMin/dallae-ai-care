@@ -287,13 +287,11 @@ function nextOfKind(checklist: ChecklistItem[], kind: ChecklistItem['kind']): Ch
 function StatusTile({
   emoji,
   label,
-  last,
   next,
   tone,
 }: {
   emoji: string;
   label: string;
-  last: string;
   next: ChecklistItem | null;
   tone: string;
 }) {
@@ -302,9 +300,7 @@ function StatusTile({
       <p className="text-[11px] font-bold tracking-wider text-foreground/70">
         {emoji} {label}
       </p>
-      <p className="mt-1 text-[10px] text-muted-foreground">마지막</p>
-      <p className="text-sm font-bold leading-tight">{last}</p>
-      <p className="mt-1.5 text-[10px] text-muted-foreground">다음</p>
+      <p className="mt-1.5 text-[10px] text-muted-foreground">해야할 일</p>
       <p className="text-sm font-bold leading-tight">
         {next ? `${formatItemTime(next.time)} · ${whenLabel(itemDateTime(next).getTime())}` : '예정 없음'}
       </p>
@@ -319,85 +315,24 @@ function BabyStatusCard({
   records: CareRecord[];
   checklist: ChecklistItem[];
 }) {
-  const [open, setOpen] = useState(false);
   const [, setTick] = useState(0);
   useEffect(() => {
     const t = setInterval(() => setTick((x) => x + 1), 60000);
     return () => clearInterval(t);
   }, []);
 
-  const lastFeed = lastByType(records, 'FEEDING');
-  const lastSleepEnd = lastByType(records, 'SLEEP_END');
-  const lastSleepStart = lastByType(records, 'SLEEP_START');
-  const lastSleep = lastSleepEnd ?? lastSleepStart;
-  const lastDiaper = lastByType(records, 'DIAPER');
-  const lastMed = lastByType(records, 'MEDICINE');
+  void records;
 
   const nextFeed = useMemo(() => nextOfKind(checklist, 'FEEDING'), [checklist]);
   const nextSleep = useMemo(() => nextOfKind(checklist, 'SLEEP'), [checklist]);
 
   return (
     <div className="rounded-3xl bg-card shadow-card p-4">
-      <p className="font-bold text-sm mb-2">아이 현재 상태</p>
+      <p className="font-bold text-sm mb-2">다음 할 일</p>
       <div className="grid grid-cols-2 gap-2">
-        <StatusTile
-          emoji="🍼"
-          label="밥"
-          tone="bg-cream"
-          last={
-            lastFeed
-              ? `${formatTime(lastFeed.at)}${lastFeed.amountMl ? ` · ${lastFeed.amountMl}ml` : ''}`
-              : '기록 없음'
-          }
-          next={nextFeed}
-        />
-        <StatusTile
-          emoji="😴"
-          label="잠"
-          tone="bg-sky/40"
-          last={
-            lastSleep
-              ? `${formatTime(lastSleep.at)} ${lastSleep.type === 'SLEEP_END' ? '종료' : '시작'}`
-              : '기록 없음'
-          }
-          next={nextSleep}
-        />
+        <StatusTile emoji="🍼" label="밥" tone="bg-cream" next={nextFeed} />
+        <StatusTile emoji="😴" label="잠" tone="bg-sky/40" next={nextSleep} />
       </div>
-
-      <button
-        onClick={() => setOpen((v) => !v)}
-        className="mt-3 w-full flex items-center justify-between text-xs font-semibold text-foreground/80 active:scale-[0.99] transition-transform"
-      >
-        <span>기저귀 · 약 마지막 상태 보기</span>
-        <ChevronDown size={16} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
-      </button>
-
-      {open && (
-        <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
-          <div className="rounded-xl bg-mint/40 p-2">
-            기저귀<br />
-            <span className="font-bold text-sm">
-              {lastDiaper ? formatTime(lastDiaper.at) : '기록 없음'}
-            </span>
-            {lastDiaper && (
-              <span className="block text-[10px] text-muted-foreground mt-0.5">
-                {formatRelative(lastDiaper.at)}
-              </span>
-            )}
-          </div>
-          <div className="rounded-xl bg-coral/30 p-2">
-            약<br />
-            <span className="font-bold text-sm">
-              {lastMed ? formatTime(lastMed.at) : '기록 없음'}
-            </span>
-            {lastMed && (
-              <span className="block text-[10px] text-muted-foreground mt-0.5">
-                {formatRelative(lastMed.at)}
-              </span>
-            )}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
