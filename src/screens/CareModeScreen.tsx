@@ -1,0 +1,532 @@
+import { useEffect, useMemo, useState } from 'react';
+import { useApp } from '@/state/app-state';
+import { IonMascot } from '@/components/IonMascot';
+import { DEFAULT_RULES, QUICK_CAREGIVER_QUESTIONS } from '@/lib/mock-data';
+import { createCareRecord, endCareSession, parseTextToRecord, startCareSession } from '@/lib/api';
+import { formatDuration, formatTime, formatRelative } from '@/lib/date';
+import { itemDateTime, todayKey, formatItemTime } from '@/lib/checklist';
+import type { CareRecord, CareRecordType, ChecklistItem } from '@/lib/types';
+import { Mic, Send, Sparkles, MessageCircle, TrendingUp, ClipboardList, ChevronDown } from 'lucide-react';
+
+type SpeechRecognitionCtor = new () => {
+  lang: string;
+  interimResults: boolean;
+  maxAlternatives: number;
+  start: () => void;
+  stop: () => void;
+  onresult: ((event: { results: ArrayLike<{ 0: { transcript: string } }> }) => void) | null;
+  onerror: (() => void) | null;
+  onend: (() => void) | null;
+};
+
+const quick: { type: CareRecordType; label: string }[] = [
+  { type: 'FEEDING', label: '분유 먹였어요' },
+  { type: 'DIAPER', label: '기저귀 갈았어요' },
+  { type: 'SLEEP_START', label: '낮잠 시작' },
+  { type: 'SLEEP_END', label: '낮잠 종료' },
+  { type: 'MEDICINE', label: '약 먹였어요' },
+  { type: 'CRYING', label: '울었어요' },
+];
+
+export function CareModeScreen() {
+  const { session, startSession, endSession, addRecord, addThankYouReport, parentThankYouMessage, child, currentUser, toast, navigate, records, checklist } = useApp();
+  const [text, setText] = useState('');
+  const [listening, setListening] = useState(false);
+  const [tick, setTick] = useState(0);
+
+  useEffect(() => {
+    if (!session) return;
+    const t = setInterval(() => setTick((x) => x + 1), 1000 * 30);
+    return () => clearInterval(t);
+  }, [session]);
+  void tick;
+
+  if (!session) {
+    return (
+      <div className="px-5 pt-8 pb-6 space-y-4">
+        <header>
+          <h1 className="text-2xl font-bold">돌봄 모드</h1>
+          <p className="text-xs text-muted-foreground mt-1">지금 아이를 돌보는 분이 사용해요</p>
+        </header>
+
+        <div className="rounded-3xl gradient-hero p-5 flex flex-col items-center text-center gap-3 shadow-card">
+          <IonMascot variant="basic" size={120} />
+          <p className="font-bold">{child.name} · {child.ageInMonths}개월</p>
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            돌봄을 시작하면 빠른 기록, 음성 기록,
+            <br />
+            챗봇 도움을 한 화면에서 사용할 수 있어요.
+          </p>
+        </div>
+
+        <div className="rounded-3xl bg-card shadow-card p-4">
+          <p className="font-bold text-sm">꼭 지킬 가족 규칙</p>
+          <div className="mt-2 space-y-1.5">
+            {DEFAULT_RULES.map((r) => (
+              <div key={r} className="text-xs flex gap-2">
+                <span className="text-mint-foreground">●</span>
+                <span>{r}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <button
+          onClick={async () => {
+            const s = await startCareSession(currentUser.name, currentUser.id);
+            startSession({
+              id: s.careSessionId,
+              familyId: 'family_1',
+              childId: child.id,
+              caregiverId: currentUser.id,
+              caregiverName: currentUser.name,
+              relationship: 'caregiver',
+              startedAt: s.startedAt,
+              status: 'ACTIVE',
+            });
+            toast('돌봄을 시작했어요. 안전이 우선이에요.');
+          }}
+          className="w-full h-14 rounded-2xl bg-primary text-primary-foreground font-semibold shadow-soft"
+        >
+          돌봄 시작하기
+        </button>
+      </div>
+    );
+  }
+
+  const onQuick = async (type: CareRecordType, label: string) => {
+    const r = await createCareRecord({
+      type,
+      recordedBy: currentUser.id,
+      recordedByName: currentUser.name,
+      source: 'MANUAL',
+      memo: label,
+      careSessionId: session.id,
+    });
+    addRecord(r);
+    toast(`${label} · 기록했어요`);
+  };
+
+  const onTextRecord = async () => {
+    if (!text.trim()) return;
+    const parsed = parseTextToRecord(text);
+    const r = await createCareRecord({
+      type: parsed.type,
+      amountMl: parsed.amountMl,
+      memo: text,
+      recordedBy: currentUser.id,
+      recordedByName: currentUser.name,
+      source: 'VOICE',
+      careSessionId: session.id,
+    });
+    addRecord(r);
+    toast('음성 기록을 저장했어요');
+    setText('');
+  };
+
+  const onVoiceRecord = () => {
+    const SpeechRecognition =
+      (window as unknown as { SpeechRecognition?: SpeechRecognitionCtor; webkitSpeechRecognition?: SpeechRecognitionCtor })
+        .SpeechRecognition ??
+      (window as unknown as { SpeechRecognition?: SpeechRecognitionCtor; webkitSpeechRecognition?: SpeechRecognitionCtor })
+        .webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+      toast('이 브라우저는 음성 인식을 지원하지 않아요. 아래 칸에 말한 내용을 적어주세요.');
+      return;
+    }
+
+    // 조부모 사용자를 위해 짧은 음성 한 문장을 텍스트 입력칸으로 옮긴다.
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'ko-KR';
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+    recognition.onresult = (event) => {
+      const transcript = event.results[0]?.[0]?.transcript?.trim();
+      if (transcript) setText(transcript);
+    };
+    recognition.onerror = () => {
+      toast('음성을 듣지 못했어요. 텍스트로 입력해 주세요.');
+      setListening(false);
+    };
+    recognition.onend = () => setListening(false);
+    setListening(true);
+    recognition.start();
+  };
+
+  return (
+    <div className="flex flex-col">
+      <header className="px-5 pt-8 pb-4 gradient-mint">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-[11px] font-bold tracking-wider text-mint-foreground">돌봄 진행 중</p>
+            <h1 className="text-xl font-bold mt-0.5">{session.caregiverName}님이 돌보는 중</h1>
+            <p className="text-xs text-muted-foreground mt-1">
+              시작 {formatTime(session.startedAt)} · {formatDuration(session.startedAt)} 경과
+            </p>
+          </div>
+          <IonMascot variant="wink" size={64} />
+        </div>
+      </header>
+
+      <div className="px-4 pt-4 space-y-3">
+        <BabyStatusCard records={records} checklist={checklist} />
+
+        <div className="rounded-3xl bg-mint/30 border border-mint/50 p-4">
+          <p className="text-[11px] font-bold tracking-wider text-mint-foreground">꼭 지킬 가족 규칙</p>
+          <div className="mt-1.5 space-y-1">
+            {DEFAULT_RULES.map((r) => (
+              <p key={r} className="text-xs leading-snug">• {r}</p>
+            ))}
+          </div>
+        </div>
+
+        <div className="rounded-3xl bg-card shadow-card p-4">
+          <p className="font-bold text-sm mb-2">빠른 기록</p>
+          <div className="grid grid-cols-2 gap-2">
+            {quick.map((q) => (
+              <button
+                key={q.label}
+                onClick={() => onQuick(q.type, q.label)}
+                className="h-14 rounded-2xl bg-cream font-semibold text-sm active:scale-95 transition-transform"
+              >
+                {q.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="rounded-3xl bg-card shadow-card p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <p className="font-bold text-sm">말로 기록하기</p>
+            <span className="text-[11px] text-muted-foreground">예: 지금 분유 먹였어</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={onVoiceRecord}
+              className={`h-12 w-12 rounded-full text-primary-foreground flex items-center justify-center shadow-soft shrink-0 ${
+                listening ? 'bg-coral animate-pulse' : 'bg-primary'
+              }`}
+              aria-label="말로 기록하기"
+            >
+              <Mic size={20} />
+            </button>
+            <input
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              placeholder="예: 지금 분유 160ml 먹였어"
+              className="flex-1 h-12 px-4 rounded-xl bg-cream border border-border text-sm"
+            />
+            <button
+              onClick={onTextRecord}
+              className="h-12 w-12 rounded-full bg-foreground text-background flex items-center justify-center shrink-0"
+            >
+              <Send size={18} />
+            </button>
+          </div>
+        </div>
+
+        <AgentHelperPanel />
+
+
+        {session.caregiverId === currentUser.id ? (
+          <button
+            onClick={async () => {
+              if (typeof window !== 'undefined' && !window.confirm('돌봄을 종료할까요? 부모님께 감사 메시지가 전달돼요.')) return;
+              const ended = endSession();
+              if (!ended) return;
+              const sessionRecords = records.filter(
+                (r) => new Date(r.recordedAt).getTime() >= new Date(ended.startedAt).getTime(),
+              );
+              const counts = {
+                feeding: sessionRecords.filter((r) => r.type === 'FEEDING').length,
+                diaper: sessionRecords.filter((r) => r.type === 'DIAPER').length,
+                sleep: sessionRecords.filter((r) => r.type.startsWith('SLEEP')).length,
+                medicine: sessionRecords.filter((r) => r.type === 'MEDICINE').length,
+                voiceNotes: sessionRecords.filter((r) => r.source === 'VOICE').length,
+              };
+              const durationLabel = formatDuration(ended.startedAt, ended.endedAt);
+              await endCareSession(ended.id, ended.startedAt, counts);
+
+              const preset = parentThankYouMessage.trim();
+              let message = preset;
+              let aiGenerated = false;
+              if (!message) {
+                try {
+                  const res = await fetch('/api/thankyou', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      caregiverName: ended.caregiverName,
+                      childName: child.name,
+                      durationLabel,
+                      counts: {
+                        feeding: counts.feeding,
+                        diaper: counts.diaper,
+                        sleep: counts.sleep,
+                        medicine: counts.medicine,
+                      },
+                    }),
+                  });
+                  if (res.ok) {
+                    const data = (await res.json()) as { message: string };
+                    message = data.message;
+                    aiGenerated = true;
+                  }
+                } catch {
+                  /* fall through */
+                }
+                if (!message) {
+                  message = `${ended.caregiverName}님, 오늘 ${child.name} 돌봐주셔서 정말 감사해요. 덕분에 안심하고 하루를 보냈어요.`;
+                  aiGenerated = true;
+                }
+              }
+
+              addThankYouReport({
+                id: `thx_${Date.now().toString(36)}`,
+                sessionId: ended.id,
+                fromUserId: 'user_parent_1',
+                fromUserName: aiGenerated ? '부모님 (AI 작성)' : '부모님',
+                toCaregiverName: ended.caregiverName,
+                message,
+                durationLabel,
+                counts: {
+                  feeding: counts.feeding,
+                  diaper: counts.diaper,
+                  sleep: counts.sleep,
+                  medicine: counts.medicine,
+                },
+                sentAt: new Date().toISOString(),
+              });
+              navigate('thankYouReport', { careSessionId: ended.id });
+            }}
+            className="w-full h-14 rounded-2xl bg-coral text-coral-foreground font-semibold shadow-soft"
+          >
+            돌봄 종료하기
+          </button>
+        ) : (
+          <div className="w-full rounded-2xl bg-muted/60 border border-border p-4 text-center">
+            <p className="text-sm font-semibold text-foreground">
+              돌봄 종료는 {session.caregiverName}님만 할 수 있어요
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">
+              지금 돌보고 있는 분이 직접 종료하면 부모님이 준비한 감사 메시지가 전달돼요.
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function AgentHelperPanel() {
+  const { navigate, setPendingChatQuestion, notifications, child } = useApp();
+  const topTip =
+    notifications.find((n) => n.status === 'UNREAD' && n.type === 'CARE_PATTERN') ??
+    notifications.find((n) => n.status === 'UNREAD');
+
+  const askIon = (q: string) => {
+    setPendingChatQuestion(q);
+    navigate('chat');
+  };
+
+  return (
+    <div className="rounded-3xl gradient-mint shadow-card p-4 space-y-3 relative overflow-hidden">
+      <div className="absolute -right-3 -bottom-3 opacity-15 pointer-events-none">
+        <IonMascot variant="basic" size={120} />
+      </div>
+      <div className="relative flex items-center gap-2">
+        <span className="text-[10px] font-bold tracking-wider bg-foreground/85 text-background px-2 py-0.5 rounded-full flex items-center gap-1">
+          <Sparkles size={10} /> 아이온이 옆에서 도와드려요
+        </span>
+      </div>
+
+      {topTip && (
+        <div className="relative rounded-2xl bg-card/90 backdrop-blur p-3 space-y-1.5">
+          <div className="flex items-center gap-1.5">
+            <TrendingUp size={12} className="text-mint-foreground" />
+            <p className="text-[10px] font-bold tracking-wider text-mint-foreground">
+              지금 봐주세요
+            </p>
+          </div>
+          <p className="text-sm font-bold leading-snug">{topTip.title}</p>
+          <p className="text-[11px] text-foreground/75 leading-relaxed">{topTip.message}</p>
+          {topTip.evidence && (
+            <p className="text-[10px] text-muted-foreground flex items-start gap-1 pt-0.5">
+              <ClipboardList size={10} className="mt-0.5 shrink-0" />
+              {topTip.evidence}
+            </p>
+          )}
+        </div>
+      )}
+
+      <div className="relative space-y-2">
+        <p className="text-[11px] font-bold text-foreground/70">
+          {child.name}이 기록을 바탕으로 빠르게 물어보세요
+        </p>
+        <div className="flex flex-wrap gap-1.5">
+          {QUICK_CAREGIVER_QUESTIONS.map((q) => (
+            <button
+              key={q}
+              onClick={() => askIon(q)}
+              className="text-[12px] px-3 py-1.5 rounded-full bg-card/90 border border-border shadow-card font-medium active:scale-95 transition-transform"
+            >
+              {q}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <button
+        onClick={() => navigate('chat')}
+        className="relative w-full h-12 rounded-2xl bg-foreground text-background font-bold text-sm flex items-center justify-center gap-2 shadow-soft active:scale-[0.98] transition-transform"
+      >
+        <MessageCircle size={16} />
+        아이온에게 직접 물어보기
+        <Send size={14} />
+      </button>
+    </div>
+  );
+}
+
+function whenLabel(targetMs: number): string {
+  const diffMin = Math.round((targetMs - Date.now()) / 60000);
+  if (diffMin <= 0) return '지금';
+  if (diffMin < 60) return `${diffMin}분 뒤`;
+  const h = Math.floor(diffMin / 60);
+  const m = diffMin % 60;
+  return m === 0 ? `${h}시간 뒤` : `${h}시간 ${m}분 뒤`;
+}
+
+function lastByType(records: CareRecord[], type: CareRecordType): CareRecord | undefined {
+  return [...records].filter((r) => r.type === type).sort((a, b) => b.recordedAt.localeCompare(a.recordedAt))[0];
+}
+
+function nextOfKind(checklist: ChecklistItem[], kind: ChecklistItem['kind']): ChecklistItem | null {
+  const today = todayKey();
+  const now = Date.now();
+  return (
+    checklist
+      .filter((it) => it.kind === kind && !it.completed && it.date >= today)
+      .filter((it) => itemDateTime(it).getTime() >= now - 5 * 60000)
+      .sort((a, b) => itemDateTime(a).getTime() - itemDateTime(b).getTime())[0] ?? null
+  );
+}
+
+function StatusTile({
+  emoji,
+  label,
+  last,
+  next,
+  tone,
+}: {
+  emoji: string;
+  label: string;
+  last: string;
+  next: ChecklistItem | null;
+  tone: string;
+}) {
+  return (
+    <div className={`rounded-2xl p-3 ${tone}`}>
+      <p className="text-[11px] font-bold tracking-wider text-foreground/70">
+        {emoji} {label}
+      </p>
+      <p className="mt-1 text-[10px] text-muted-foreground">마지막</p>
+      <p className="text-sm font-bold leading-tight">{last}</p>
+      <p className="mt-1.5 text-[10px] text-muted-foreground">다음</p>
+      <p className="text-sm font-bold leading-tight">
+        {next ? `${formatItemTime(next.time)} · ${whenLabel(itemDateTime(next).getTime())}` : '예정 없음'}
+      </p>
+    </div>
+  );
+}
+
+function BabyStatusCard({
+  records,
+  checklist,
+}: {
+  records: CareRecord[];
+  checklist: ChecklistItem[];
+}) {
+  const [open, setOpen] = useState(false);
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setTick((x) => x + 1), 60000);
+    return () => clearInterval(t);
+  }, []);
+
+  const lastFeed = lastByType(records, 'FEEDING');
+  const lastSleepEnd = lastByType(records, 'SLEEP_END');
+  const lastSleepStart = lastByType(records, 'SLEEP_START');
+  const lastSleep = lastSleepEnd ?? lastSleepStart;
+  const lastDiaper = lastByType(records, 'DIAPER');
+  const lastMed = lastByType(records, 'MEDICINE');
+
+  const nextFeed = useMemo(() => nextOfKind(checklist, 'FEEDING'), [checklist]);
+  const nextSleep = useMemo(() => nextOfKind(checklist, 'SLEEP'), [checklist]);
+
+  return (
+    <div className="rounded-3xl bg-card shadow-card p-4">
+      <p className="font-bold text-sm mb-2">아이 현재 상태</p>
+      <div className="grid grid-cols-2 gap-2">
+        <StatusTile
+          emoji="🍼"
+          label="밥"
+          tone="bg-cream"
+          last={
+            lastFeed
+              ? `${formatTime(lastFeed.recordedAt)}${lastFeed.amountMl ? ` · ${lastFeed.amountMl}ml` : ''}`
+              : '기록 없음'
+          }
+          next={nextFeed}
+        />
+        <StatusTile
+          emoji="😴"
+          label="잠"
+          tone="bg-sky/40"
+          last={
+            lastSleep
+              ? `${formatTime(lastSleep.recordedAt)} ${lastSleep.type === 'SLEEP_END' ? '종료' : '시작'}`
+              : '기록 없음'
+          }
+          next={nextSleep}
+        />
+      </div>
+
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="mt-3 w-full flex items-center justify-between text-xs font-semibold text-foreground/80 active:scale-[0.99] transition-transform"
+      >
+        <span>기저귀 · 약 마지막 상태 보기</span>
+        <ChevronDown size={16} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+
+      {open && (
+        <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
+          <div className="rounded-xl bg-mint/40 p-2">
+            기저귀<br />
+            <span className="font-bold text-sm">
+              {lastDiaper ? formatTime(lastDiaper.recordedAt) : '기록 없음'}
+            </span>
+            {lastDiaper && (
+              <span className="block text-[10px] text-muted-foreground mt-0.5">
+                {formatRelative(lastDiaper.recordedAt)}
+              </span>
+            )}
+          </div>
+          <div className="rounded-xl bg-coral/30 p-2">
+            약<br />
+            <span className="font-bold text-sm">
+              {lastMed ? formatTime(lastMed.recordedAt) : '기록 없음'}
+            </span>
+            {lastMed && (
+              <span className="block text-[10px] text-muted-foreground mt-0.5">
+                {formatRelative(lastMed.recordedAt)}
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

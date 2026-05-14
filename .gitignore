@@ -1,0 +1,12 @@
+node_modules/
+.idea/
+apps/api/.venv/
+apps/api/dallae.db
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.env
+.env.local
+dist/
+.tanstack/
+.wrangler/

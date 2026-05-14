@@ -1,0 +1,108 @@
+@import "tailwindcss" source(none);
+@source "../src";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-mint: var(--mint);
+  --color-mint-foreground: var(--mint-foreground);
+  --color-sky: var(--sky);
+  --color-sky-foreground: var(--sky-foreground);
+  --color-coral: var(--coral);
+  --color-coral-foreground: var(--coral-foreground);
+  --color-cream: var(--cream);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+}
+
+:root {
+  --radius: 1.1rem;
+  /* Warm cream palette */
+  --background: oklch(0.98 0.018 90);
+  --foreground: oklch(0.28 0.04 60);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.28 0.04 60);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.28 0.04 60);
+
+  /* Primary: warm honey/amber */
+  --primary: oklch(0.74 0.15 70);
+  --primary-foreground: oklch(0.99 0.01 90);
+
+  --secondary: oklch(0.95 0.03 90);
+  --secondary-foreground: oklch(0.32 0.05 60);
+
+  --muted: oklch(0.95 0.02 85);
+  --muted-foreground: oklch(0.5 0.03 70);
+
+  --accent: oklch(0.93 0.05 145);
+  --accent-foreground: oklch(0.3 0.06 145);
+
+  --destructive: oklch(0.62 0.2 25);
+  --destructive-foreground: oklch(0.99 0.01 90);
+
+  --border: oklch(0.9 0.02 85);
+  --input: oklch(0.92 0.02 85);
+  --ring: oklch(0.74 0.15 70);
+
+  /* Custom semantic */
+  --mint: oklch(0.88 0.08 150);
+  --mint-foreground: oklch(0.34 0.08 150);
+  --sky: oklch(0.88 0.06 230);
+  --sky-foreground: oklch(0.36 0.08 230);
+  --coral: oklch(0.82 0.1 30);
+  --coral-foreground: oklch(0.4 0.13 30);
+  --cream: oklch(0.97 0.03 90);
+  --warning: oklch(0.85 0.13 75);
+  --warning-foreground: oklch(0.34 0.1 60);
+
+  --gradient-warm: linear-gradient(160deg, oklch(0.97 0.03 85) 0%, oklch(0.94 0.05 60) 100%);
+  --gradient-mint: linear-gradient(160deg, oklch(0.94 0.06 150) 0%, oklch(0.88 0.09 150) 100%);
+  --gradient-hero: linear-gradient(170deg, oklch(0.97 0.04 85) 0%, oklch(0.93 0.06 145) 100%);
+  --shadow-soft: 0 4px 20px -8px oklch(0.5 0.08 60 / 0.18);
+  --shadow-card: 0 2px 12px -4px oklch(0.5 0.08 60 / 0.12);
+  --shadow-frame: 0 30px 80px -30px oklch(0.3 0.05 60 / 0.4);
+}
+
+@layer base {
+  * { border-color: var(--color-border); }
+  html, body { background: oklch(0.94 0.025 80); color: var(--color-foreground); }
+  body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', system-ui, sans-serif; }
+}
+
+@layer utilities {
+  .gradient-hero { background: var(--gradient-hero); }
+  .gradient-warm { background: var(--gradient-warm); }
+  .gradient-mint { background: var(--gradient-mint); }
+  .shadow-soft { box-shadow: var(--shadow-soft); }
+  .shadow-card { box-shadow: var(--shadow-card); }
+  .shadow-frame { box-shadow: var(--shadow-frame); }
+  .safe-bottom { padding-bottom: max(env(safe-area-inset-bottom), 0px); }
+  .with-bottom-nav-space { padding-bottom: calc(104px + max(env(safe-area-inset-bottom), 0px)); }
+}

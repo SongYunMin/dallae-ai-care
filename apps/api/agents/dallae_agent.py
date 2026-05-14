@@ -1,0 +1,169 @@
+from __future__ import annotations
+
+import inspect
+import json
+import os
+from typing import Any
+
+
+DALLAE_AGENT_INSTRUCTION = """
+너는 '달래'의 영유아 돌봄 보조 에이전트다.
+반드시 제공된 아이 정보, 최신 기록, 가족 규칙, 돌봄자 권한 범위 안에서만 답한다.
+의료 진단, 병명 추정, 약물 처방은 하지 않는다.
+위험 신호가 있으면 보호자 또는 의료진 확인을 안내한다.
+응답은 JSON 객체 하나로만 반환한다.
+"""
+
+
+class DallaeAgentService:
+    """ADK 세부 실행 방식을 API 라우터에서 숨기는 서비스 계층."""
+
+    def __init__(self) -> None:
+        self.model = os.getenv("ADK_MODEL", "gemini-2.0-flash")
+
+    async def ask(self, user_message: str, context: dict) -> dict:
+        prompt = self._build_prompt(user_message, context)
+        response_text = await self._try_adk(prompt, context)
+        if response_text:
+            try:
+                parsed = json.loads(response_text)
+                return self._apply_safety_guard(self._normalize(parsed), user_message)
+            except Exception:
+                pass
+        return self._apply_safety_guard(self.mock_response(user_message, context), user_message)
+
+    async def _try_adk(self, prompt: str, context: dict) -> str | None:
+        """google-adk가 설치되고 GOOGLE_API_KEY가 있을 때만 실제 에이전트를 실행한다."""
+        if not os.getenv("GOOGLE_API_KEY"):
+            return None
+
+        try:
+            from google.adk.agents import LlmAgent
+            from google.adk.runners import Runner
+            from google.adk.sessions import InMemorySessionService
+            from google.genai import types
+        except Exception:
+            return None
+
+        try:
+            agent = LlmAgent(
+                name="dallae_care_agent",
+                model=self.model,
+                instruction=DALLAE_AGENT_INSTRUCTION,
+            )
+            session_service = InMemorySessionService()
+            session_id = f"session_{context['caregiver']['id']}"
+            maybe_session = session_service.create_session(
+                app_name="dallae",
+                user_id=context["caregiver"]["id"],
+                session_id=session_id,
+            )
+            if inspect.isawaitable(maybe_session):
+                await maybe_session
+            runner = Runner(agent=agent, app_name="dallae", session_service=session_service)
+            content = types.Content(role="user", parts=[types.Part(text=prompt)])
+            final_text: str | None = None
+            async for event in runner.run_async(
+                user_id=context["caregiver"]["id"],
+                session_id=session_id,
+                new_message=content,
+            ):
+                if event.is_final_response() and event.content and event.content.parts:
+                    final_text = event.content.parts[0].text.strip()
+            return final_text
+        except Exception:
+            return None
+
+    def _build_prompt(self, user_message: str, context: dict) -> str:
+        return "\n".join(
+            [
+                "[아이/돌봄 컨텍스트]",
+                json.dumps(context, ensure_ascii=False, indent=2),
+                "",
+                "[돌보는 사람 질문]",
+                user_message,
+                "",
+                "[반환 형식]",
+                json.dumps(
+                    {
+                        "answer": "1~3문장 한국어 답변",
+                        "nextActions": ["바로 할 일"],
+                        "ruleReminders": ["적용되는 가족 규칙"],
+                        "recordSuggestions": ["기록하면 좋은 내용"],
+                        "proactiveNotifications": ["부모에게 알릴 필요가 있는 내용"],
+                        "escalation": "NONE | ASK_PARENT | MEDICAL_CHECK",
+                    },
+                    ensure_ascii=False,
+                ),
+            ]
+        )
+
+    def _normalize(self, payload: dict[str, Any]) -> dict:
+        """LLM 출력 누락 필드를 UI가 기대하는 빈 배열/기본값으로 보정한다."""
+        return {
+            "answer": str(payload.get("answer") or "기록을 확인했지만 바로 답하기 어려워요. 보호자에게 확인해 주세요."),
+            "nextActions": list(payload.get("nextActions") or []),
+            "ruleReminders": list(payload.get("ruleReminders") or []),
+            "recordSuggestions": list(payload.get("recordSuggestions") or []),
+            "proactiveNotifications": list(payload.get("proactiveNotifications") or []),
+            "escalation": payload.get("escalation") if payload.get("escalation") in {"NONE", "ASK_PARENT", "MEDICAL_CHECK"} else "NONE",
+        }
+
+    def _apply_safety_guard(self, response: dict, message: str) -> dict:
+        medical_keywords = ["고열", "39도", "호흡", "청색증", "의식", "경련", "발작", "알레르기", "응급"]
+        # 약물/민감 돌봄 판단은 모델 응답과 무관하게 보호자 확인으로 올린다.
+        parent_keywords = ["약", "해열제", "진통제", "투약", "복용", "영상", "유튜브", "외출", "심하게", "계속", "오래"]
+        if any(keyword in message for keyword in medical_keywords):
+            response["escalation"] = "MEDICAL_CHECK"
+            response["answer"] = "위험 신호일 수 있어요. 보호자에게 즉시 연락하고, 상태가 심하면 의료진 확인을 받아주세요."
+            response["nextActions"] = ["보호자에게 바로 연락하세요.", "호흡, 체온, 의식 상태를 확인하세요."]
+        elif response.get("escalation") == "NONE" and any(keyword in message for keyword in parent_keywords):
+            response["escalation"] = "ASK_PARENT"
+        return response
+
+    def mock_response(self, user_message: str, context: dict) -> dict:
+        rules = context.get("activeRules", [])
+        latest = context.get("latestStatus", {})
+        if "유튜브" in user_message or "영상" in user_message:
+            return {
+                "answer": "영상은 부모가 허용한 경우가 아니면 보여주지 않는 규칙이 있어요. 먼저 기저귀와 졸림 신호를 확인해보세요.",
+                "nextActions": ["기저귀 상태를 확인하세요.", "좋아하는 장난감으로 먼저 달래보세요.", "조용한 곳에서 안아주세요."],
+                "ruleReminders": [rule for rule in rules if "영상" in rule or "유튜브" in rule][:1],
+                "recordSuggestions": ["보챈 시간과 달랜 방법을 기록해두면 좋아요."],
+                "proactiveNotifications": [],
+                "escalation": "ASK_PARENT",
+            }
+        if "약" in user_message:
+            return {
+                "answer": "약은 부모가 등록한 내용이 있을 때만 먹이는 규칙이에요. 현재 확인되는 약 기록이 없으면 보호자에게 먼저 확인해 주세요.",
+                "nextActions": ["보호자에게 약 복용 여부를 확인하세요."],
+                "ruleReminders": [rule for rule in rules if "약" in rule][:1],
+                "recordSuggestions": ["확인 후 약 기록을 남겨주세요."],
+                "proactiveNotifications": ["약 복용 확인이 필요할 수 있어요."],
+                "escalation": "ASK_PARENT",
+            }
+        if "수유" in user_message or "분유" in user_message or "먹" in user_message:
+            feeding = latest.get("feeding")
+            answer = "최근 수유 기록이 아직 없어요. 보호자에게 마지막 수유 시간을 확인해 주세요."
+            if feeding:
+                amount = f" {feeding.get('amountMl')}ml" if feeding.get("amountMl") else ""
+                answer = f"마지막 수유 기록은 {amount.strip() or '수유'}로 남아 있어요."
+            return {
+                "answer": answer,
+                "nextActions": ["아이의 배고픈 신호를 확인하세요.", "수유했다면 기록을 남겨주세요."],
+                "ruleReminders": [],
+                "recordSuggestions": ["수유 시간과 양을 기록해두면 다음 돌봄자가 이어받기 쉬워요."],
+                "proactiveNotifications": [],
+                "escalation": "NONE",
+            }
+        return {
+            "answer": "현재 아이 상태를 기준으로 먼저 기저귀, 졸림 신호, 마지막 수유 시간을 확인해보세요.",
+            "nextActions": ["기저귀 상태를 확인하세요.", "졸려 보이면 조용한 곳에서 안아주세요.", "필요하면 보호자에게 확인하세요."],
+            "ruleReminders": rules[:2],
+            "recordSuggestions": ["방금 확인한 상태를 기록해두면 다음 보호자가 이어받기 쉽습니다."],
+            "proactiveNotifications": [],
+            "escalation": "NONE",
+        }
+
+
+agent_service = DallaeAgentService()
