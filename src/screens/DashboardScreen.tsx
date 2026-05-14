@@ -6,35 +6,17 @@ import {
   MessageCircle,
   Sparkles,
   ChevronRight,
-  AlertCircle,
-  Clock,
-  ShieldCheck,
-  TrendingUp,
-  Calendar,
-  HeartHandshake as HeartHandshakeIcon,
+  Milk,
+  Baby,
+  Moon,
 } from "lucide-react";
 import { todayKey } from "@/lib/checklist";
-import type { AgentNotification } from "@/lib/types";
+import { buildCareBriefings, type CareBriefingItem } from "@/lib/care-briefing";
 
-const NOTI_META: Record<
-  AgentNotification["type"],
-  { label: string; tone: string; icon: typeof Sparkles }
-> = {
-  ROUTINE_SUGGESTION: { label: "루틴 변화", tone: "bg-sky/60 text-sky-foreground", icon: Clock },
-  MISSED_RECORD: {
-    label: "빠진 기록",
-    tone: "bg-coral/60 text-coral-foreground",
-    icon: AlertCircle,
-  },
-  CARE_PATTERN: { label: "돌봄 패턴", tone: "bg-mint/70 text-mint-foreground", icon: TrendingUp },
-  RULE_REMINDER: {
-    label: "가족 규칙",
-    tone: "bg-foreground/85 text-background",
-    icon: ShieldCheck,
-  },
-  SCHEDULE: { label: "일정 알림", tone: "bg-cream text-foreground", icon: Calendar },
-  CARE_TIP: { label: "돌봄 팁", tone: "bg-cream text-foreground", icon: Sparkles },
-  THANK_YOU: { label: "수고리포트", tone: "bg-coral/40 text-foreground", icon: HeartHandshakeIcon },
+const BRIEFING_ICONS: Record<CareBriefingItem["kind"], typeof Milk> = {
+  feeding: Milk,
+  diaper: Baby,
+  sleep: Moon,
 };
 
 export function DashboardScreen() {
@@ -46,14 +28,14 @@ export function DashboardScreen() {
   const doneCount = todayItems.filter((c) => c.completed).length;
 
   const unread = notifications.filter((n) => n.status === "UNREAD");
-  const topNotis = unread.slice(0, 3);
+  const briefings = buildCareBriefings(records, child);
 
   const ageDays = Math.max(
     0,
     Math.floor((Date.now() - new Date(child.birthDate).getTime()) / (1000 * 60 * 60 * 24)),
   );
   const sortedRecords = [...records].sort(
-    (a, b) => new Date(b.at).getTime() - new Date(a.at).getTime(),
+    (a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime(),
   );
   const lastByType = (types: string[]) => sortedRecords.find((r) => types.includes(r.type));
   const lastFeed = lastByType(["FEEDING"]);
@@ -140,40 +122,19 @@ export function DashboardScreen() {
             </button>
           </div>
 
-          {/* Top 3 notifications */}
+          {/* 최근 기록만 근거로 한 홈 브리핑. 알림 목록과 섞지 않는다. */}
           <div className="relative space-y-2">
-            <p className="text-[11px] font-bold text-foreground/70">✨ 아이온이 먼저 알려드려요</p>
-            {topNotis.length === 0 ? (
-              <div className="rounded-2xl bg-card/70 backdrop-blur px-3 py-3 text-[12px] text-muted-foreground text-center">
-                새로운 알림이 없어요
-              </div>
-            ) : (
-              <div className="space-y-1.5">
-                {topNotis.map((n) => {
-                  const meta = NOTI_META[n.type];
-                  const Icon = meta.icon;
-                  return (
-                    <button
-                      key={n.id}
-                      onClick={() => navigate("notifications")}
-                      className="w-full text-left rounded-2xl bg-card/90 backdrop-blur px-3 py-2 flex items-center gap-2 active:scale-[0.99] transition-transform"
-                    >
-                      <span
-                        className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full flex items-center gap-1 shrink-0 ${meta.tone}`}
-                      >
-                        <Icon size={10} />
-                      </span>
-                      <p className="text-[12px] font-semibold truncate flex-1">{n.title}</p>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
+            <p className="text-[11px] font-bold text-foreground/70">최근 기록 기반 브리핑</p>
+            <div className="space-y-1.5">
+              {briefings.map((item) => (
+                <BriefingCard key={item.kind} item={item} />
+              ))}
+            </div>
             <button
-              onClick={() => navigate("notifications")}
+              onClick={() => navigate("records")}
               className="w-full text-[12px] font-semibold text-foreground/70 flex items-center justify-center gap-1 py-1 active:scale-95 transition-transform"
             >
-              + 더보기
+              기록 자세히 보기
               <ChevronRight size={12} />
             </button>
           </div>
@@ -185,25 +146,25 @@ export function DashboardScreen() {
             <StatusTile
               label="마지막 수유"
               value={lastFeed?.amountMl ? `${lastFeed.amountMl}ml` : lastFeed ? "수유" : "기록 없음"}
-              sub={timeAgo(lastFeed?.at)}
+              sub={timeAgo(lastFeed?.recordedAt)}
               tone="bg-cream"
             />
             <StatusTile
               label="마지막 낮잠"
               value={lastSleep ? "잠" : "기록 없음"}
-              sub={timeAgo(lastSleep?.at)}
+              sub={timeAgo(lastSleep?.recordedAt)}
               tone="bg-sky/40"
             />
             <StatusTile
               label="기저귀"
               value={lastDiaper ? "정상" : "기록 없음"}
-              sub={timeAgo(lastDiaper?.at)}
+              sub={timeAgo(lastDiaper?.recordedAt)}
               tone="bg-mint/50"
             />
             <StatusTile
               label="약 복용"
               value={lastMedicine ? "복용" : "기록 없음"}
-              sub={timeAgo(lastMedicine?.at)}
+              sub={timeAgo(lastMedicine?.recordedAt)}
               tone="bg-coral/40"
             />
           </div>
@@ -261,6 +222,22 @@ export function DashboardScreen() {
           </div>
         </div>
 
+      </div>
+    </div>
+  );
+}
+
+function BriefingCard({ item }: { item: CareBriefingItem }) {
+  const Icon = BRIEFING_ICONS[item.kind];
+  return (
+    <div className="rounded-2xl bg-card/90 backdrop-blur px-3 py-2.5 flex gap-2">
+      <span className={`h-8 w-8 rounded-xl flex items-center justify-center shrink-0 ${item.tone}`}>
+        <Icon size={16} />
+      </span>
+      <div className="min-w-0">
+        <p className="text-[11px] font-bold text-foreground/60">{item.label}</p>
+        <p className="text-[13px] font-bold leading-snug">{item.title}</p>
+        <p className="text-[11px] text-foreground/65 leading-snug mt-0.5">{item.detail}</p>
       </div>
     </div>
   );

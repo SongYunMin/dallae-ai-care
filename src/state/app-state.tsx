@@ -17,8 +17,19 @@ import {
   MOCK_RECORDS,
   PARENT_RULES,
 } from '@/lib/mock-data';
-import { itemDateTime, makeMockChecklist } from '@/lib/checklist';
-import { evaluateAgentNotifications, updateAgentNotificationStatus } from '@/lib/api';
+import { collectChecklistNotificationUpdates, makeMockChecklist } from '@/lib/checklist';
+import {
+  createChecklistItem as createChecklistItemApi,
+  createChecklistNotification,
+  deleteChecklistItem as deleteChecklistItemApi,
+  evaluateAgentNotifications,
+  listAgentNotifications,
+  listCareRecords,
+  listChecklistItems,
+  saveThankYouReport,
+  updateAgentNotificationStatus,
+  updateChecklistItem as updateChecklistItemApi,
+} from '@/lib/api';
 import { nowKstIso } from '@/lib/kst';
 
 export type Screen =
@@ -83,6 +94,19 @@ function pathForScreen(screen: Screen, payload?: unknown): string {
     return `/reports/${encodeURIComponent(p?.careSessionId ?? 'latest')}/thank-you`;
   }
   return SCREEN_PATHS[screen] ?? '/dashboard';
+}
+
+function sortRecords(records: CareRecord[]): CareRecord[] {
+  return [...records].sort((a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime());
+}
+
+function upsertRecord(records: CareRecord[], record: CareRecord): CareRecord[] {
+  // 같은 서버 ID를 다시 받는 경우 기존 항목을 교체해 화면 중복과 통계 중복을 막는다.
+  return sortRecords([record, ...records.filter((item) => item.id !== record.id)]);
+}
+
+function upsertThankYouReport(reports: ThankYouReport[], report: ThankYouReport): ThankYouReport[] {
+  return [report, ...reports.filter((item) => item.sessionId !== report.sessionId)];
 }
 
 type AppState = {
@@ -213,6 +237,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  useEffect(() => {
+    void listCareRecords().then((loaded) => {
+      if (loaded) setRecords(sortRecords(loaded));
+    });
+    void listAgentNotifications().then((loaded) => {
+      if (loaded) setNotifications(loaded);
+    });
+    void listChecklistItems().then((loaded) => {
+      if (loaded) setChecklist(loaded);
+    });
+  }, []);
+
   const refreshAgentNotifications = useCallback(() => {
     void evaluateAgentNotifications().then((res) => mergeNotifications(res.notifications));
   }, [mergeNotifications]);
@@ -221,40 +257,40 @@ export function AppProvider({ children }: { children: ReactNode }) {
     refreshAgentNotifications();
   }, [refreshAgentNotifications]);
 
-  // Polling: 체크리스트 시간이 되면 토스트로 푸시 알림
+  // Polling: 부모가 작성한 체크리스트 시간이 되면 토스트와 알림 목록에 함께 쌓는다.
   const toastRef = useRef(toast);
   toastRef.current = toast;
   const checklistRef = useRef(checklist);
   checklistRef.current = checklist;
   useEffect(() => {
     const tick = () => {
-      const now = Date.now();
-      const updates = new Map<string, 'notifiedDue' | 'notifiedFollowup'>();
-      const messages: string[] = [];
-      for (const it of checklistRef.current) {
-        if (it.completed) continue;
-        const diffMin = (now - itemDateTime(it).getTime()) / 60000;
-        if (diffMin >= 0 && !it.notifiedDue) {
-          updates.set(it.id, 'notifiedDue');
-          messages.push(`🔔 체크리스트 시간이에요 — ${it.label}`);
-        } else if (diffMin >= 30 && !it.notifiedFollowup) {
-          updates.set(it.id, 'notifiedFollowup');
-          messages.push(`⏰ 아직 완료하지 않으셨어요 — ${it.label}`);
-        }
-      }
-      if (updates.size === 0) return;
+      const updates = collectChecklistNotificationUpdates(checklistRef.current);
+      if (updates.length === 0) return;
+
+      const fieldById = new Map(updates.map((update) => [update.id, update.field]));
       setChecklist((arr) =>
         arr.map((it) => {
-          const field = updates.get(it.id);
+          const field = fieldById.get(it.id);
           return field ? { ...it, [field]: true } : it;
         }),
       );
-      messages.forEach((m) => toastRef.current(m));
+      updates.forEach((update) => {
+        const phase = update.field === 'notifiedDue' ? 'due' : 'followup';
+        void createChecklistNotification(update.id, phase).then((notification) => {
+          if (notification) {
+            mergeNotifications([notification]);
+            return;
+          }
+          mergeNotifications([update.notification]);
+          toastRef.current('체크리스트 알림을 백엔드에 저장하지 못했어요');
+        });
+        toastRef.current(update.toast);
+      });
     };
     tick();
     const id = setInterval(tick, 30_000);
     return () => clearInterval(id);
-  }, []);
+  }, [mergeNotifications]);
 
   const value: AppState = {
     screen,
@@ -287,7 +323,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     },
     records,
     addRecord: (r) => {
-      setRecords((arr) => [r, ...arr]);
+      setRecords((arr) => upsertRecord(arr, r));
       // 기록이 바뀌면 백엔드가 최신 맥락으로 AI 알림 후보를 다시 판단한다.
       refreshAgentNotifications();
     },
@@ -319,47 +355,92 @@ export function AppProvider({ children }: { children: ReactNode }) {
     toasts,
     toast,
     checklist,
-    addChecklistItem: (item) =>
+    addChecklistItem: (item) => {
+      const localItem: ChecklistItem = {
+        ...item,
+        id: `cl_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`,
+        familyId: 'family_1',
+        childId: child.id,
+        completed: false,
+        createdBy: currentUser.id,
+        createdByRole: currentUser.role,
+      };
       setChecklist((arr) =>
-        [
-          ...arr,
-          {
-            ...item,
-            id: `cl_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`,
-            completed: false,
-            createdBy: currentUser.id,
-          },
-        ].sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time)),
-      ),
-    toggleChecklistItem: (id) =>
+        [...arr, localItem].sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time)),
+      );
+      void createChecklistItemApi(localItem).then((saved) => {
+        if (saved) {
+          setChecklist((arr) => arr.map((it) => (it.id === localItem.id ? saved : it)));
+          return;
+        }
+        toast('체크리스트를 백엔드에 저장하지 못했어요');
+      });
+    },
+    toggleChecklistItem: (id) => {
+      const target = checklistRef.current.find((it) => it.id === id);
+      if (!target) return;
+      const completed = !target.completed;
+      const patch = {
+        completed,
+        completedAt: completed ? nowKstIso() : null,
+        completedBy: completed ? currentUser.name : null,
+      };
       setChecklist((arr) =>
         arr.map((it) =>
           it.id === id
             ? {
                 ...it,
-                completed: !it.completed,
-                completedAt: !it.completed ? nowKstIso() : undefined,
-                completedBy: !it.completed ? currentUser.name : undefined,
+                completed,
+                completedAt: patch.completedAt ?? undefined,
+                completedBy: patch.completedBy ?? undefined,
               }
             : it,
         ),
-      ),
-    removeChecklistItem: (id) => setChecklist((arr) => arr.filter((it) => it.id !== id)),
+      );
+      void updateChecklistItemApi(id, patch).then((saved) => {
+        if (saved) {
+          setChecklist((arr) => arr.map((it) => (it.id === id ? saved : it)));
+          return;
+        }
+        toast('체크리스트 완료 상태를 백엔드에 저장하지 못했어요');
+      });
+    },
+    removeChecklistItem: (id) => {
+      const removed = checklistRef.current.find((it) => it.id === id);
+      setChecklist((arr) => arr.filter((it) => it.id !== id));
+      void deleteChecklistItemApi(id).then((deleted) => {
+        if (deleted) return;
+        if (removed) {
+          setChecklist((arr) =>
+            [...arr, removed].sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time)),
+          );
+        }
+        toast('체크리스트 삭제를 백엔드에 저장하지 못했어요');
+      });
+    },
     thankYouReports,
     addThankYouReport: (r) => {
-      setThankYouReports((arr) => [r, ...arr]);
-      // 수신자 알림함에 푸시 (시뮬레이션)
+      setThankYouReports((arr) => upsertThankYouReport(arr, r));
+      void saveThankYouReport(r).then((saved) => {
+        if (!saved) return;
+        setThankYouReports((arr) => {
+          const current = arr.find((item) => item.sessionId === saved.sessionId);
+          if (current && new Date(current.sentAt).getTime() > new Date(saved.sentAt).getTime()) return arr;
+          return upsertThankYouReport(arr, saved);
+        });
+      });
+      // 수신자 알림함에 푸시한다. 서버 저장도 같은 ID로 upsert하므로 중복되지 않는다.
       const noti: AgentNotification = {
-        id: `noti_thx_${r.id}`,
+        id: `noti_thx_${r.sessionId}`,
         type: 'THANK_YOU',
-        title: `${r.fromUserName}님이 수고리포트를 보냈어요`,
+        title: '수고리포트가 도착했어요',
         message: r.message,
         evidence: `${r.durationLabel} 돌봄 · 수유 ${r.counts.feeding}회 · 기저귀 ${r.counts.diaper}회 · 낮잠 ${r.counts.sleep}회`,
         priority: 'MEDIUM',
         status: 'UNREAD',
         createdAt: r.sentAt,
       };
-      setNotifications((arr) => [noti, ...arr]);
+      setNotifications((arr) => [noti, ...arr.filter((item) => item.id !== noti.id)]);
     },
     childMood,
     setChildMood: (m) =>

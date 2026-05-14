@@ -16,8 +16,8 @@ export function BottomNav() {
   const visibleTabs = isParent
     ? tabs
     : currentUser.role === "CAREGIVER_EDITOR"
-      ? tabs.filter((t) => t.id === "dashboard" || t.id === "careMode" || t.id === "chat")
-      : tabs.filter((t) => t.id === "dashboard" || t.id === "chat");
+      ? tabs.filter((t) => t.id === "dashboard" || t.id === "records" || t.id === "careMode" || t.id === "chat")
+      : tabs.filter((t) => t.id === "dashboard" || t.id === "records" || t.id === "chat");
 
   return (
     <nav className="absolute bottom-0 inset-x-0 z-40 bg-card/95 backdrop-blur border-t border-border safe-bottom">

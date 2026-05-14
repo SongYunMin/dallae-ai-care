@@ -4,7 +4,9 @@ import type {
   CareRecord,
   CareRecordType,
   Invite,
+  ChecklistItem,
   RecordSource,
+  ThankYouReport,
   UserRole,
 } from './types';
 import { nowKstIso } from './kst';
@@ -18,7 +20,26 @@ const API_BASE =
 
 const delay = (ms = 200) => new Promise((r) => setTimeout(r, ms));
 
-async function requestJson<T>(path: string, init?: RequestInit): Promise<T | null> {
+type ChecklistPatch = Omit<Partial<ChecklistItem>, 'completedAt' | 'completedBy'> & {
+  completedAt?: string | null;
+  completedBy?: string | null;
+};
+
+class ApiHttpError extends Error {
+  constructor(
+    public status: number,
+    message: string,
+  ) {
+    super(message);
+  }
+}
+
+async function requestJson<T>(
+  path: string,
+  init?: RequestInit,
+  options: { fallbackOnHttpError?: boolean } = {},
+): Promise<T | null> {
+  const fallbackOnHttpError = options.fallbackOnHttpError ?? true;
   try {
     const res = await fetch(`${API_BASE}${path}`, {
       ...init,
@@ -27,9 +48,13 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T | nul
         ...(init?.headers ?? {}),
       },
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      if (fallbackOnHttpError) return null;
+      throw new ApiHttpError(res.status, await res.text().catch(() => res.statusText));
+    }
     return (await res.json()) as T;
-  } catch {
+  } catch (err) {
+    if (err instanceof ApiHttpError) throw err;
     return null;
   }
 }
@@ -111,7 +136,11 @@ export async function createInvite(input: {
 }
 
 export async function getInvite(token: string): Promise<Invite> {
-  const res = await requestJson<Invite>(`/api/invites/${encodeURIComponent(token)}`);
+  const res = await requestJson<Invite>(
+    `/api/invites/${encodeURIComponent(token)}`,
+    undefined,
+    { fallbackOnHttpError: false },
+  );
   if (res) return res;
 
   await delay();
@@ -122,6 +151,8 @@ export async function getInvite(token: string): Promise<Invite> {
     relationship: '할머니',
     role: 'CAREGIVER_EDITOR',
     status: 'ACTIVE',
+    memo: null,
+    thankYouMessage: null,
   };
 }
 
@@ -132,9 +163,14 @@ export async function acceptInvite(_token: string, input: { name: string; emailO
     childId: string;
     role: 'CAREGIVER_EDITOR' | 'CAREGIVER_VIEWER';
     name: string;
+    relationship: string;
+    inviteToken?: string;
+    thankYouMessage?: string | null;
   }>(`/api/invites/${encodeURIComponent(_token)}/accept`, {
     method: 'POST',
     body: JSON.stringify(input),
+  }, {
+    fallbackOnHttpError: false,
   });
   if (res) return res;
 
@@ -145,6 +181,9 @@ export async function acceptInvite(_token: string, input: { name: string; emailO
     childId: FALLBACK_CHILD_ID,
     role: 'CAREGIVER_EDITOR' as const,
     name: input.name,
+    relationship: '할머니',
+    inviteToken: _token,
+    thankYouMessage: null,
   };
 }
 
@@ -198,12 +237,22 @@ export async function createCareRecord(input: {
   return createLocalRecord(input);
 }
 
+export async function listCareRecords(childId = FALLBACK_CHILD_ID): Promise<CareRecord[] | null> {
+  const res = await requestJson<{ records: CareRecord[] }>(
+    `/api/records?childId=${encodeURIComponent(childId)}`,
+  );
+  return res?.records ?? null;
+}
+
 export async function startCareSession(caregiverName: string, caregiverId = 'user_grandma_1') {
   const res = await requestJson<{
     careSessionId: string;
     startedAt: string;
     status: 'ACTIVE';
     caregiverName: string;
+    relationship: string;
+    inviteToken?: string;
+    thankYouMessage?: string | null;
   }>('/api/care-sessions/start', {
     method: 'POST',
     body: JSON.stringify({
@@ -212,6 +261,8 @@ export async function startCareSession(caregiverName: string, caregiverId = 'use
       caregiverId,
       caregiverName,
     }),
+  }, {
+    fallbackOnHttpError: false,
   });
   if (res) return res;
 
@@ -221,6 +272,9 @@ export async function startCareSession(caregiverName: string, caregiverId = 'use
     startedAt: nowKstIso(),
     status: 'ACTIVE' as const,
     caregiverName,
+    relationship: 'caregiver',
+    inviteToken: undefined,
+    thankYouMessage: null,
   };
 }
 
@@ -267,6 +321,39 @@ export async function saveVoiceNote(text: string, careSessionId = 'session_demo'
     voiceNoteId: 'voice_' + Date.now(),
     parsedRecord: parseTextToRecord(text),
   };
+}
+
+export async function createThankYouMessage(input: {
+  familyId: string;
+  childId: string;
+  caregiverId: string;
+  careSessionId: string;
+  caregiverName: string;
+  childName: string;
+  durationLabel: string;
+  counts: { feeding: number; diaper: number; sleep: number; medicine: number };
+}): Promise<{ message: string; agentKind?: string } | null> {
+  return requestJson<{ message: string; agentKind?: string }>('/api/thankyou', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+export async function saveThankYouReport(report: ThankYouReport): Promise<ThankYouReport | null> {
+  return requestJson<ThankYouReport>('/api/thank-you-reports', {
+    method: 'POST',
+    body: JSON.stringify({
+      familyId: FALLBACK_FAMILY_ID,
+      childId: FALLBACK_CHILD_ID,
+      ...report,
+    }),
+  });
+}
+
+export async function getThankYouReport(sessionId: string): Promise<ThankYouReport | null> {
+  return requestJson<ThankYouReport>(
+    `/api/thank-you-reports/${encodeURIComponent(sessionId)}`,
+  );
 }
 
 export function parseTextToRecord(text: string): { type: CareRecordType; memo: string; amountMl?: number } {
@@ -389,11 +476,11 @@ function mockAgentResponse(message: string): AgentCareResponse {
   };
 }
 
-export async function listAgentNotifications(childId = FALLBACK_CHILD_ID): Promise<AgentNotification[]> {
+export async function listAgentNotifications(childId = FALLBACK_CHILD_ID): Promise<AgentNotification[] | null> {
   const res = await requestJson<{ notifications: AgentNotification[] }>(
     `/api/children/${encodeURIComponent(childId)}/agent-notifications`,
   );
-  return res?.notifications ?? [];
+  return res?.notifications ?? null;
 }
 
 export async function evaluateAgentNotifications() {
@@ -417,6 +504,64 @@ export async function updateAgentNotificationStatus(id: string, status: string) 
     },
   );
   return res ?? { id, status };
+}
+
+export async function listChecklistItems(childId = FALLBACK_CHILD_ID): Promise<ChecklistItem[] | null> {
+  const res = await requestJson<{ checklists: ChecklistItem[] }>(
+    `/api/checklists?childId=${encodeURIComponent(childId)}`,
+  );
+  return res?.checklists ?? null;
+}
+
+export async function createChecklistItem(
+  item: ChecklistItem,
+  childId = FALLBACK_CHILD_ID,
+): Promise<ChecklistItem | null> {
+  return requestJson<ChecklistItem>('/api/checklists', {
+    method: 'POST',
+    body: JSON.stringify({
+      id: item.id,
+      familyId: item.familyId ?? FALLBACK_FAMILY_ID,
+      childId: item.childId ?? childId,
+      date: item.date,
+      time: item.time,
+      label: item.label,
+      kind: item.kind,
+      createdBy: item.createdBy,
+      createdByRole: item.createdByRole,
+    }),
+  });
+}
+
+export async function updateChecklistItem(
+  id: string,
+  patch: ChecklistPatch,
+): Promise<ChecklistItem | null> {
+  return requestJson<ChecklistItem>(`/api/checklists/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(patch),
+  });
+}
+
+export async function deleteChecklistItem(id: string): Promise<boolean> {
+  const res = await requestJson<{ id: string; deleted: boolean }>(
+    `/api/checklists/${encodeURIComponent(id)}`,
+    { method: 'DELETE' },
+  );
+  return res?.deleted ?? false;
+}
+
+export async function createChecklistNotification(
+  checklistId: string,
+  phase: 'due' | 'followup',
+): Promise<AgentNotification | null> {
+  return requestJson<AgentNotification>(
+    `/api/checklists/${encodeURIComponent(checklistId)}/notifications`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ phase }),
+    },
+  );
 }
 
 export async function getChatSuggestions() {

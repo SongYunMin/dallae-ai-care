@@ -1,8 +1,14 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "@/state/app-state";
 import { IonMascot } from "@/components/IonMascot";
 import { DEFAULT_RULES } from "@/lib/mock-data";
-import { createCareRecord, endCareSession, parseTextToRecord, startCareSession } from "@/lib/api";
+import {
+  createCareRecord,
+  createThankYouMessage,
+  endCareSession,
+  parseTextToRecord,
+  startCareSession,
+} from "@/lib/api";
 import { formatDuration, formatTime } from "@/lib/date";
 import { itemDateTime, todayKey, formatItemTime } from "@/lib/checklist";
 import type { CareRecord, CareRecordType, ChecklistItem } from "@/lib/types";
@@ -67,6 +73,12 @@ export function CareModeScreen() {
   const [listening, setListening] = useState(false);
   const [tick, setTick] = useState(0);
   const [moodOpen, setMoodOpen] = useState(false);
+  const isParent = currentUser.role === "PARENT_ADMIN" || currentUser.role === "PARENT_EDITOR";
+  const recordsRef = useRef(records);
+
+  useEffect(() => {
+    recordsRef.current = records;
+  }, [records]);
 
   useEffect(() => {
     if (!session) return;
@@ -75,7 +87,7 @@ export function CareModeScreen() {
   }, [session]);
   void tick;
 
-  if (!session) {
+  if (!session && !isParent) {
     return (
       <div className="px-5 pt-8 pb-6 space-y-4">
         <header>
@@ -109,18 +121,25 @@ export function CareModeScreen() {
 
         <button
           onClick={async () => {
-            const s = await startCareSession(currentUser.name, currentUser.id);
-            startSession({
-              id: s.careSessionId,
-              familyId: "family_1",
-              childId: child.id,
-              caregiverId: currentUser.id,
-              caregiverName: currentUser.name,
-              relationship: "caregiver",
-              startedAt: s.startedAt,
-              status: "ACTIVE",
-            });
-            toast("돌봄을 시작했어요. 안전이 우선이에요.");
+            try {
+              const s = await startCareSession(currentUser.name, currentUser.id);
+              startSession({
+                id: s.careSessionId,
+                familyId: "family_1",
+                childId: child.id,
+                caregiverId: currentUser.id,
+                caregiverName: currentUser.name,
+                relationship: s.relationship ?? "caregiver",
+                inviteToken: s.inviteToken,
+                thankYouMessage: s.thankYouMessage,
+                startedAt: s.startedAt,
+                status: "ACTIVE",
+              });
+              toast("돌봄을 시작했어요. 안전이 우선이에요.");
+            } catch {
+              toast("돌봄자 초대 링크로 참여한 뒤 시작할 수 있어요.");
+              navigate("dashboard");
+            }
           }}
           className="w-full h-14 rounded-2xl bg-primary text-primary-foreground font-semibold shadow-soft"
         >
@@ -137,8 +156,9 @@ export function CareModeScreen() {
       recordedByName: currentUser.name,
       source: "MANUAL",
       memo: label,
-      careSessionId: session.id,
+      careSessionId: session?.id,
     });
+    recordsRef.current = [r, ...recordsRef.current.filter((item) => item.id !== r.id)];
     addRecord(r);
     toast(`${label} · 기록했어요`);
   };
@@ -153,8 +173,9 @@ export function CareModeScreen() {
       recordedBy: currentUser.id,
       recordedByName: currentUser.name,
       source: "VOICE",
-      careSessionId: session.id,
+      careSessionId: session?.id,
     });
+    recordsRef.current = [r, ...recordsRef.current.filter((item) => item.id !== r.id)];
     addRecord(r);
     toast("음성 기록을 저장했어요");
     setText("");
@@ -190,18 +211,21 @@ export function CareModeScreen() {
     recognition.start();
   };
 
+  const title = session ? `${session.caregiverName}님이 돌보는 중` : `${currentUser.name}님의 기록 모드`;
+  const subtitle = session
+    ? `시작 ${formatTime(session.startedAt)} · ${formatDuration(session.startedAt)} 경과`
+    : "세션 없이 남긴 기록도 돌보미와 함께 확인할 수 있어요";
+
   return (
     <div className="flex flex-col">
       <header className="px-5 pt-8 pb-4 gradient-mint">
         <div className="flex items-center justify-between">
           <div>
             <p className="text-[11px] font-bold tracking-wider text-mint-foreground">
-              돌봄 진행 중
+              {session ? "돌봄 진행 중" : "부모 기록"}
             </p>
-            <h1 className="text-xl font-bold mt-0.5">{session.caregiverName}님이 돌보는 중</h1>
-            <p className="text-xs text-muted-foreground mt-1">
-              시작 {formatTime(session.startedAt)} · {formatDuration(session.startedAt)} 경과
-            </p>
+            <h1 className="text-xl font-bold mt-0.5">{title}</h1>
+            <p className="text-xs text-muted-foreground mt-1">{subtitle}</p>
           </div>
           <IonMascot variant="wink" size={64} />
         </div>
@@ -261,10 +285,13 @@ export function CareModeScreen() {
                       setChildMood({ emoji: m.emoji, label: m.label, image: m.image });
                       const r = await createCareRecord({
                         type: "NOTE",
-                        recordedBy: currentUser.name,
+                        recordedBy: currentUser.id,
+                        recordedByName: currentUser.name,
                         source: "MANUAL",
                         memo: `감정: ${m.emoji} ${m.label}`,
+                        careSessionId: session?.id,
                       });
+                      recordsRef.current = [r, ...recordsRef.current.filter((item) => item.id !== r.id)];
                       addRecord(r);
                       setMoodOpen(false);
                       toast(`${m.emoji} ${m.label} · 감정 기록`);
@@ -315,9 +342,10 @@ export function CareModeScreen() {
           </div>
         </div>
 
-        {session.caregiverId === currentUser.id ? (
+        {session ? (
+          session.caregiverId === currentUser.id ? (
           <button
-            onClick={async () => {
+            onClick={() => {
               if (
                 typeof window !== "undefined" &&
                 !window.confirm("돌봄을 종료할까요? 부모님께 감사 메시지가 전달돼요.")
@@ -325,9 +353,14 @@ export function CareModeScreen() {
                 return;
               const ended = endSession();
               if (!ended) return;
-              const sessionRecords = records.filter(
-                (r) => new Date(r.recordedAt).getTime() >= new Date(ended.startedAt).getTime(),
-              );
+              const sessionRecords = recordsRef.current.filter((r) => {
+                if (r.careSessionId) return r.careSessionId === ended.id;
+                const recordedAt = new Date(r.recordedAt).getTime();
+                return (
+                  recordedAt >= new Date(ended.startedAt).getTime() &&
+                  recordedAt <= new Date(ended.endedAt ?? nowKstIso()).getTime()
+                );
+              });
               const counts = {
                 feeding: sessionRecords.filter((r) => r.type === "FEEDING").length,
                 diaper: sessionRecords.filter((r) => r.type === "DIAPER").length,
@@ -336,53 +369,20 @@ export function CareModeScreen() {
                 voiceNotes: sessionRecords.filter((r) => r.source === "VOICE").length,
               };
               const durationLabel = formatDuration(ended.startedAt, ended.endedAt);
-              await endCareSession(ended.id, ended.startedAt, counts);
+              void endCareSession(ended.id, ended.startedAt, counts).catch(() => {
+                toast("돌봄 종료 상태를 백엔드에 저장하지 못했어요");
+              });
 
-              const preset = parentThankYouMessage.trim();
-              let message = preset;
-              let aiGenerated = false;
-              if (!message) {
-                try {
-                  const res = await fetch("/api/thankyou", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                      familyId: ended.familyId,
-                      childId: ended.childId,
-                      caregiverId: ended.caregiverId,
-                      careSessionId: ended.id,
-                      caregiverName: ended.caregiverName,
-                      childName: child.name,
-                      durationLabel,
-                      counts: {
-                        feeding: counts.feeding,
-                        diaper: counts.diaper,
-                        sleep: counts.sleep,
-                        medicine: counts.medicine,
-                      },
-                    }),
-                  });
-                  if (res.ok) {
-                    const data = (await res.json()) as { message: string };
-                    message = data.message;
-                    aiGenerated = true;
-                  }
-                } catch {
-                  /* fall through */
-                }
-                if (!message) {
-                  message = `${ended.caregiverName}님, 오늘 ${child.name} 돌봐주셔서 정말 감사해요. 덕분에 안심하고 하루를 보냈어요.`;
-                  aiGenerated = true;
-                }
-              }
-
-              addThankYouReport({
-                id: `thx_${Date.now().toString(36)}`,
+              const preset = (ended.thankYouMessage || parentThankYouMessage).trim();
+              const baseReport = {
+                id: `thx_${ended.id}`,
                 sessionId: ended.id,
                 fromUserId: "user_parent_1",
-                fromUserName: aiGenerated ? "부모님 (AI 작성)" : "부모님",
+                fromUserName: preset ? "부모님" : "부모님 (AI 작성)",
                 toCaregiverName: ended.caregiverName,
-                message,
+                message:
+                  preset ||
+                  `${ended.caregiverName}님, 오늘 ${child.name} 돌봐주셔서 정말 감사해요. 덕분에 안심하고 하루를 보냈어요.`,
                 durationLabel,
                 counts: {
                   feeding: counts.feeding,
@@ -391,20 +391,56 @@ export function CareModeScreen() {
                   medicine: counts.medicine,
                 },
                 sentAt: nowKstIso(),
-              });
+              };
+
+              addThankYouReport(baseReport);
               navigate("thankYouReport", { careSessionId: ended.id });
+
+              if (!preset) {
+                void createThankYouMessage({
+                  familyId: ended.familyId,
+                  childId: ended.childId,
+                  caregiverId: ended.caregiverId,
+                  careSessionId: ended.id,
+                  caregiverName: ended.caregiverName,
+                  childName: child.name,
+                  durationLabel,
+                  counts: {
+                    feeding: counts.feeding,
+                    diaper: counts.diaper,
+                    sleep: counts.sleep,
+                    medicine: counts.medicine,
+                  },
+                }).then((res) => {
+                  if (!res?.message) return;
+                  addThankYouReport({
+                    ...baseReport,
+                    fromUserName: "부모님 (AI 작성)",
+                    message: res.message,
+                    sentAt: nowKstIso(),
+                  });
+                });
+              }
             }}
             className="w-full h-14 rounded-2xl bg-coral text-coral-foreground font-semibold shadow-soft"
           >
             돌봄 종료하기
           </button>
-        ) : (
+          ) : (
           <div className="w-full rounded-2xl bg-muted/60 border border-border p-4 text-center">
             <p className="text-sm font-semibold text-foreground">
               돌봄 종료는 {session.caregiverName}님만 할 수 있어요
             </p>
             <p className="text-xs text-muted-foreground mt-1">
               지금 돌보고 있는 분이 직접 종료하면 부모님이 준비한 감사 메시지가 전달돼요.
+            </p>
+          </div>
+          )
+        ) : (
+          <div className="w-full rounded-2xl bg-muted/60 border border-border p-4 text-center">
+            <p className="text-sm font-semibold text-foreground">부모 기록 모드로 저장 중이에요</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              돌봄 세션을 만들지 않기 때문에 종료 리포트 없이 기록만 공유돼요.
             </p>
           </div>
         )}

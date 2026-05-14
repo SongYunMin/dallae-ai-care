@@ -10,6 +10,7 @@ import {
   ShieldCheck,
   Calendar,
   HeartHandshake,
+  ListChecks,
 } from 'lucide-react';
 
 const priorityLabel = { LOW: '낮음', MEDIUM: '보통', HIGH: '중요' } as const;
@@ -54,6 +55,12 @@ const TYPE_META: Record<
     icon: Calendar,
     desc: '일정에 맞춘 사전 추천',
   },
+  CHECKLIST: {
+    label: '체크리스트',
+    tone: 'bg-mint/70 text-mint-foreground',
+    icon: ListChecks,
+    desc: '부모가 작성한 돌봄 체크리스트',
+  },
   CARE_TIP: {
     label: '돌봄 팁',
     tone: 'bg-cream text-foreground',
@@ -86,7 +93,7 @@ export function NotificationsScreen() {
             </div>
             <h1 className="text-lg font-bold mt-1">아이온이 먼저 알려드려요</h1>
             <p className="text-[11px] text-muted-foreground mt-0.5">
-              루틴 변화 · 빠진 기록 · 돌봄 패턴 · 가족 규칙 분석 결과
+              루틴 변화 · 빠진 기록 · 체크리스트 · 가족 규칙 분석 결과
             </p>
           </div>
         </div>

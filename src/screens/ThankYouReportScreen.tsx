@@ -1,7 +1,9 @@
+import { useEffect, useState } from 'react';
 import { useApp } from '@/state/app-state';
 import { IonMascot } from '@/components/IonMascot';
 import { formatTime } from '@/lib/date';
-import type { CareRecord } from '@/lib/types';
+import { getThankYouReport } from '@/lib/api';
+import type { CareRecord, ThankYouReport } from '@/lib/types';
 import { Heart, ClipboardList, Sparkles } from 'lucide-react';
 
 const TYPE_LABEL: Record<CareRecord['type'], string> = {
@@ -15,14 +17,35 @@ const TYPE_LABEL: Record<CareRecord['type'], string> = {
 };
 
 export function ThankYouReportScreen() {
-  const { lastEndedSession, records, thankYouReports, navigate } = useApp();
+  const { payload, lastEndedSession, records, thankYouReports, navigate } = useApp();
+  const routeSessionId = (payload as { careSessionId?: string } | null)?.careSessionId;
   const session = lastEndedSession;
-  const report = thankYouReports.find((r) => r.sessionId === session?.id) ?? thankYouReports[0];
+  const targetSessionId = routeSessionId ?? session?.id;
+  const localReport = targetSessionId
+    ? thankYouReports.find((r) => r.sessionId === targetSessionId)
+    : thankYouReports[0];
+  const [loadedReport, setLoadedReport] = useState<ThankYouReport | null>(null);
 
-  const sessionRecords = session
+  useEffect(() => {
+    setLoadedReport(null);
+    if (!targetSessionId || localReport) return;
+    void getThankYouReport(targetSessionId).then((loaded) => {
+      if (loaded) setLoadedReport(loaded);
+    });
+  }, [localReport, targetSessionId]);
+
+  const report = localReport ?? loadedReport;
+
+  const sessionRecords = targetSessionId
     ? records
-        .filter((r) => new Date(r.recordedAt).getTime() >= new Date(session.startedAt).getTime())
-        .filter((r) => !session.endedAt || new Date(r.recordedAt).getTime() <= new Date(session.endedAt).getTime())
+        .filter((r) => {
+          if (r.careSessionId || !session || session.id !== targetSessionId) return r.careSessionId === targetSessionId;
+          const recordedAt = new Date(r.recordedAt).getTime();
+          return (
+            recordedAt >= new Date(session.startedAt).getTime() &&
+            (!session.endedAt || recordedAt <= new Date(session.endedAt).getTime())
+          );
+        })
         .sort((a, b) => new Date(a.recordedAt).getTime() - new Date(b.recordedAt).getTime())
     : [];
 
@@ -125,7 +148,7 @@ export function ThankYouReportScreen() {
 
       <div className="space-y-2 mt-4">
         <button
-          onClick={() => navigate('report')}
+          onClick={() => navigate('report', { careSessionId: targetSessionId ?? 'latest' })}
           className="w-full h-13 py-3.5 rounded-2xl bg-primary text-primary-foreground font-semibold shadow-soft"
         >
           전체 리포트 보기

@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import json
 import os
-import sqlite3
+import shutil
+import threading
 from datetime import datetime
+from json import JSONDecodeError
 from pathlib import Path
 from uuid import uuid4
 
@@ -14,16 +16,34 @@ def now_iso() -> str:
     return now_kst_iso()
 
 
-class DallaeStore:
-    """해커톤 MVP용 저장소.
+def _format_item_time(time: str) -> str:
+    hour_text, minute = time.split(":")
+    hour = int(hour_text)
+    period = "오전" if hour < 12 else "오후"
+    display_hour = 12 if hour % 12 == 0 else hour % 12
+    return f"{period} {display_hour}:{minute}"
 
-    가족/세션 등 MVP 상태는 아직 메모리에 두지만, 돌봄 기록은 모든 에이전트의
-    공통 근거가 되므로 SQLite를 source of truth로 사용한다.
+
+class DallaeStore:
+    """해커톤 MVP용 JSON 파일 저장소.
+
+    로컬 데모에서는 한 프로세스가 한 JSON 파일을 쓰는 단순 구조가 운영이 쉽다.
+    대신 파일 저장은 깨지기 쉬우므로, 모든 변경은 메모리 상태를 바꾼 뒤 잠금 안에서
+    백업 생성 -> 임시 파일 fsync -> 원자적 교체 순서로 저장한다.
     """
 
-    def __init__(self, database_url: str | None = None) -> None:
-        self.db_path = Path((database_url or os.getenv("DATABASE_URL", "sqlite:///./dallae.db")).replace("sqlite:///", ""))
-        self._init_sqlite()
+    def __init__(self, store_path: str | Path | None = None) -> None:
+        env_path = os.getenv("DALLAE_STORE_PATH")
+        self.store_path = Path(store_path or env_path or "./dallae-store.json")
+        self._lock = threading.RLock()
+        self._reset_state()
+        if self.store_path.exists():
+            self._load_json_state()
+        else:
+            self.seed()
+            self._persist()
+
+    def _reset_state(self) -> None:
         self.families: dict[str, dict] = {}
         self.children: dict[str, dict] = {}
         self.members: dict[str, dict] = {}
@@ -31,55 +51,62 @@ class DallaeStore:
         self.invites: dict[str, dict] = {}
         self.sessions: dict[str, dict] = {}
         self.voice_notes: list[dict] = []
+        self.records: dict[str, dict] = {}
         self.notifications: dict[str, dict] = {}
-        self.seed()
+        self.checklists: dict[str, dict] = {}
+        self.thank_you_reports: dict[str, dict] = {}
 
-    def _init_sqlite(self) -> None:
-        self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        with sqlite3.connect(self.db_path) as conn:
-            conn.executescript(
-                """
-                create table if not exists families (id text primary key, payload text not null);
-                create table if not exists children (id text primary key, family_id text not null, payload text not null);
-                create table if not exists members (id text primary key, family_id text not null, payload text not null);
-                create table if not exists care_records (id text primary key, family_id text not null, child_id text not null, payload text not null);
-                create table if not exists care_sessions (id text primary key, family_id text not null, child_id text not null, payload text not null);
-                create table if not exists agent_notifications (id text primary key, family_id text not null, child_id text not null, payload text not null);
-                create index if not exists idx_care_records_child_id on care_records(child_id);
-                """
-            )
+    def _load_json_state(self) -> None:
+        """저장된 JSON 문서를 메모리 dict/list로 복원한다."""
+        try:
+            with self.store_path.open("r", encoding="utf-8") as handle:
+                state = json.load(handle)
+        except (OSError, JSONDecodeError) as exc:
+            raise ValueError(f"JSON 저장소를 읽을 수 없습니다: {self.store_path}") from exc
 
-    def _insert_record_if_missing(self, record: dict) -> None:
-        """같은 기록 ID가 없을 때만 SQLite에 JSON payload를 저장한다."""
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute(
-                """
-                insert or ignore into care_records (id, family_id, child_id, payload)
-                values (?, ?, ?, ?)
-                """,
-                (
-                    record["id"],
-                    record["familyId"],
-                    record["childId"],
-                    json.dumps(record, ensure_ascii=False),
-                ),
-            )
+        self.families = dict(state.get("families", {}))
+        self.children = dict(state.get("children", {}))
+        self.members = dict(state.get("members", {}))
+        self.rules = {child_id: list(rules) for child_id, rules in state.get("rules", {}).items()}
+        self.invites = dict(state.get("invites", {}))
+        self.sessions = dict(state.get("sessions", {}))
+        self.voice_notes = list(state.get("voiceNotes", []))
+        self.records = dict(state.get("records", {}))
+        self.notifications = dict(state.get("notifications", {}))
+        self.checklists = dict(state.get("checklists", {}))
+        self.thank_you_reports = dict(state.get("thankYouReports", {}))
 
-    def _insert_record(self, record: dict) -> None:
-        """새 돌봄 기록을 SQLite에 저장해 모든 에이전트가 같은 근거를 보게 한다."""
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute(
-                """
-                insert into care_records (id, family_id, child_id, payload)
-                values (?, ?, ?, ?)
-                """,
-                (
-                    record["id"],
-                    record["familyId"],
-                    record["childId"],
-                    json.dumps(record, ensure_ascii=False),
-                ),
-            )
+    def _snapshot(self) -> dict:
+        return {
+            "version": 1,
+            "families": self.families,
+            "children": self.children,
+            "members": self.members,
+            "rules": self.rules,
+            "invites": self.invites,
+            "sessions": self.sessions,
+            "voiceNotes": self.voice_notes,
+            "records": self.records,
+            "notifications": self.notifications,
+            "checklists": self.checklists,
+            "thankYouReports": self.thank_you_reports,
+        }
+
+    def _persist(self) -> None:
+        """현재 메모리 상태를 JSON 파일에 안전하게 반영한다."""
+        with self._lock:
+            self.store_path.parent.mkdir(parents=True, exist_ok=True)
+            if self.store_path.exists():
+                backup_path = self.store_path.with_name(f"{self.store_path.name}.bak")
+                shutil.copy2(self.store_path, backup_path)
+
+            tmp_path = self.store_path.with_name(f"{self.store_path.name}.{os.getpid()}.tmp")
+            with tmp_path.open("w", encoding="utf-8") as handle:
+                json.dump(self._snapshot(), handle, ensure_ascii=False, indent=2, sort_keys=True)
+                handle.write("\n")
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(tmp_path, self.store_path)
 
     def seed(self) -> None:
         self.families["family_1"] = {"id": "family_1", "name": "하린이 가족"}
@@ -109,20 +136,18 @@ class DallaeStore:
             "role": "CAREGIVER_EDITOR",
         }
         self.rules["child_1"] = ["영상보다 장난감으로 달래기", "자기 전에는 조명을 어둡게 해요"]
-        self._insert_record_if_missing(
-            {
-                "id": "record_seed_1",
-                "familyId": "family_1",
-                "childId": "child_1",
-                "type": "FEEDING",
-                "amountMl": 160,
-                "recordedAt": now_iso(),
-                "recordedBy": "user_parent_1",
-                "recordedByName": "엄마",
-                "source": "MANUAL",
-                "memo": "분유 160ml",
-            }
-        )
+        self.records["record_seed_1"] = {
+            "id": "record_seed_1",
+            "familyId": "family_1",
+            "childId": "child_1",
+            "type": "FEEDING",
+            "amountMl": 160,
+            "recordedAt": now_iso(),
+            "recordedBy": "user_parent_1",
+            "recordedByName": "엄마",
+            "source": "MANUAL",
+            "memo": "분유 160ml",
+        }
         self.notifications["noti_seed_1"] = {
             "id": "noti_seed_1",
             "familyId": "family_1",
@@ -135,6 +160,29 @@ class DallaeStore:
             "status": "UNREAD",
             "createdAt": now_iso(),
         }
+
+        today = now_iso()[:10]
+        for time, label, kind in [
+            ("09:00", "아침 분유 160ml", "FEEDING"),
+            ("11:00", "오전 간식 + 기저귀 확인", "DIAPER"),
+            ("13:00", "점심 이유식 + 분유", "FEEDING"),
+            ("15:00", "낮잠 재우기", "SLEEP"),
+            ("17:00", "기저귀 갈기", "DIAPER"),
+            ("19:30", "저녁 목욕", "BATH"),
+        ]:
+            checklist_id = f"cl_{today}_{time}_{kind}"
+            self.checklists[checklist_id] = {
+                "id": checklist_id,
+                "familyId": "family_1",
+                "childId": "child_1",
+                "date": today,
+                "time": time,
+                "label": label,
+                "kind": kind,
+                "completed": False,
+                "createdBy": "user_parent_1",
+                "createdByRole": "PARENT_ADMIN",
+            }
 
     def create_onboarding(self, payload: dict) -> dict:
         family_id = "family_1"
@@ -159,10 +207,12 @@ class DallaeStore:
             "relationship": "parent",
             "role": "PARENT_ADMIN",
         }
+        self._persist()
         return {"familyId": family_id, "childId": child_id, "userId": user_id, "role": "PARENT_ADMIN"}
 
     def create_invite(self, family_id: str, payload: dict, origin: str) -> dict:
         token = f"invite_{uuid4().hex[:8]}"
+        thank_you_message = (payload.get("memo") or "").strip()
         invite = {
             "token": token,
             "familyId": family_id,
@@ -170,39 +220,80 @@ class DallaeStore:
             "relationship": payload["relationship"],
             "role": payload["role"],
             "status": "ACTIVE",
-            "memo": payload.get("memo"),
+            "memo": thank_you_message or None,
+            "thankYouMessage": thank_you_message or None,
         }
         self.invites[token] = invite
+        self._persist()
         return {"token": token, "inviteUrl": f"{origin.rstrip('/')}/invite/{token}"}
 
+    def get_invite(self, token: str) -> dict | None:
+        """초대 토큰을 조회한다. 데모 토큰은 명시된 값만 허용해 임의 토큰 수락을 막는다."""
+        invite = self.invites.get(token)
+        if invite:
+            return invite
+        if token == "invite_demo123":
+            return {
+                "token": token,
+                "familyId": "family_1",
+                "childName": self.children["child_1"]["name"],
+                "relationship": "할머니",
+                "role": "CAREGIVER_EDITOR",
+                "status": "ACTIVE",
+                "memo": None,
+                "thankYouMessage": None,
+            }
+        return None
+
     def accept_invite(self, token: str, payload: dict) -> dict:
-        invite = self.invites.get(token) or {
-            "token": token,
-            "familyId": "family_1",
-            "childName": "하린",
-            "relationship": "grandmother",
-            "role": "CAREGIVER_EDITOR",
-            "status": "ACTIVE",
-        }
-        user_id = f"user_{uuid4().hex[:8]}"
-        self.members[user_id] = {
+        invite = self.get_invite(token)
+        if not invite:
+            raise KeyError("초대 링크를 찾을 수 없습니다.")
+
+        # 이미 수락한 링크는 최초 수락자와 감사 메시지 매핑을 유지한다.
+        accepted_user_id = invite.get("acceptedUserId")
+        if accepted_user_id and accepted_user_id in self.members:
+            member = self.members[accepted_user_id]
+            return {
+                "userId": accepted_user_id,
+                "familyId": member["familyId"],
+                "childId": "child_1",
+                "role": member["role"],
+                "name": member["name"],
+                "relationship": member["relationship"],
+                "inviteToken": token,
+                "thankYouMessage": member.get("thankYouMessage"),
+            }
+
+        user_id = "user_grandma_1" if token == "invite_demo123" else f"user_{uuid4().hex[:8]}"
+        thank_you_message = invite.get("thankYouMessage") or invite.get("memo")
+        member = {
             "id": user_id,
             "familyId": invite["familyId"],
             "name": payload["name"],
             "relationship": invite["relationship"],
             "role": invite["role"],
+            "inviteToken": token,
+            "thankYouMessage": thank_you_message,
         }
+        self.members[user_id] = member
         invite["status"] = "ACCEPTED"
+        invite["acceptedUserId"] = user_id
         self.invites[token] = invite
-        return {"userId": user_id, "familyId": invite["familyId"], "childId": "child_1", "role": invite["role"], "name": payload["name"]}
+        self._persist()
+        return {
+            "userId": user_id,
+            "familyId": invite["familyId"],
+            "childId": "child_1",
+            "role": invite["role"],
+            "name": payload["name"],
+            "relationship": invite["relationship"],
+            "inviteToken": token,
+            "thankYouMessage": thank_you_message,
+        }
 
     def child_records(self, child_id: str) -> list[dict]:
-        with sqlite3.connect(self.db_path) as conn:
-            rows = conn.execute(
-                "select payload from care_records where child_id = ?",
-                (child_id,),
-            ).fetchall()
-        records = [json.loads(row[0]) for row in rows]
+        records = [record for record in self.records.values() if record["childId"] == child_id]
         return sorted(records, key=lambda record: record["recordedAt"], reverse=True)
 
     def create_record(self, payload: dict) -> dict:
@@ -216,12 +307,14 @@ class DallaeStore:
             "amountMl": payload.get("amountMl"),
             "recordedAt": now_iso(),
             "recordedBy": payload["recordedBy"],
-            "recordedByName": payload.get("recordedByName") or self.members.get(payload["recordedBy"], {}).get("name", payload["recordedBy"]),
+            "recordedByName": payload.get("recordedByName")
+            or self.members.get(payload["recordedBy"], {}).get("name", payload["recordedBy"]),
             "source": payload["source"],
             "memo": payload.get("memo"),
             "photoUrl": payload.get("photoUrl"),
         }
-        self._insert_record(record)
+        self.records[record["id"]] = record
+        self._persist()
         return record
 
     def start_session(self, payload: dict) -> dict:
@@ -234,16 +327,20 @@ class DallaeStore:
             "caregiverId": payload["caregiverId"],
             "caregiverName": payload.get("caregiverName") or member["name"],
             "relationship": member["relationship"],
+            "inviteToken": member.get("inviteToken"),
+            "thankYouMessage": member.get("thankYouMessage"),
             "startedAt": now_iso(),
             "status": "ACTIVE",
         }
         self.sessions[session_id] = session
+        self._persist()
         return session
 
     def end_session(self, session_id: str, counts: dict | None = None) -> dict:
         session = self.sessions[session_id]
         session["endedAt"] = now_iso()
         session["status"] = "ENDED"
+        self._persist()
         started = datetime.fromisoformat(session["startedAt"])
         ended = datetime.fromisoformat(session["endedAt"])
         duration_minutes = max(0, int((ended - started).total_seconds() // 60))
@@ -255,6 +352,20 @@ class DallaeStore:
             "praise": "덕분에 부모가 아이 상태를 정확히 이어받을 수 있어요.",
         }
 
+    def add_voice_note(self, note: dict) -> dict:
+        """음성 원문도 JSON 상태에 저장해 재시작 후 기록 근거를 확인할 수 있게 한다."""
+        self.voice_notes.append(note)
+        self._persist()
+        return note
+
+    def add_rule(self, child_id: str, text: str) -> list[str]:
+        """사용자 가족 규칙을 중복 없이 저장한다."""
+        rules = self.rules.setdefault(child_id, [])
+        if text and text not in rules:
+            rules.append(text)
+            self._persist()
+        return rules
+
     def add_notification(self, family_id: str, child_id: str, payload: dict) -> dict:
         notification = {
             "id": payload.get("id") or f"noti_{uuid4().hex[:8]}",
@@ -263,7 +374,168 @@ class DallaeStore:
             **payload,
         }
         self.notifications[notification["id"]] = notification
+        self._persist()
         return notification
+
+    def list_notifications(self, child_id: str) -> list[dict]:
+        notifications = [item for item in self.notifications.values() if item["childId"] == child_id]
+        return sorted(notifications, key=lambda item: item["createdAt"], reverse=True)
+
+    def update_notification_status(self, notification_id: str, status: str) -> dict:
+        if notification_id not in self.notifications:
+            raise KeyError("알림을 찾을 수 없습니다.")
+        self.notifications[notification_id]["status"] = status
+        self._persist()
+        return {"id": notification_id, "status": status}
+
+    def list_checklists(self, child_id: str) -> list[dict]:
+        checklists = [item for item in self.checklists.values() if item["childId"] == child_id]
+        return sorted(checklists, key=lambda item: (item["date"], item["time"], item["id"]))
+
+    def create_checklist(self, payload: dict) -> dict:
+        checklist = {
+            "id": payload.get("id") or f"cl_{uuid4().hex[:8]}",
+            "familyId": payload["familyId"],
+            "childId": payload["childId"],
+            "date": payload["date"],
+            "time": payload["time"],
+            "label": payload["label"],
+            "kind": payload["kind"],
+            "completed": payload.get("completed", False),
+            "completedAt": payload.get("completedAt"),
+            "completedBy": payload.get("completedBy"),
+            "notifiedDue": payload.get("notifiedDue", False),
+            "notifiedFollowup": payload.get("notifiedFollowup", False),
+            "createdBy": payload["createdBy"],
+            "createdByRole": payload.get("createdByRole"),
+        }
+        self.checklists[checklist["id"]] = checklist
+        self._persist()
+        return checklist
+
+    def update_checklist(self, checklist_id: str, payload: dict) -> dict:
+        if checklist_id not in self.checklists:
+            raise KeyError("체크리스트를 찾을 수 없습니다.")
+        checklist = self.checklists[checklist_id]
+        for key in [
+            "date",
+            "time",
+            "label",
+            "kind",
+            "completed",
+            "completedAt",
+            "completedBy",
+            "notifiedDue",
+            "notifiedFollowup",
+        ]:
+            if key in payload:
+                checklist[key] = payload[key]
+        self._persist()
+        return checklist
+
+    def delete_checklist(self, checklist_id: str) -> None:
+        if checklist_id not in self.checklists:
+            raise KeyError("체크리스트를 찾을 수 없습니다.")
+        del self.checklists[checklist_id]
+        self._persist()
+
+    def create_checklist_notification(self, checklist_id: str, phase: str) -> dict:
+        if checklist_id not in self.checklists:
+            raise KeyError("체크리스트를 찾을 수 없습니다.")
+        checklist = self.checklists[checklist_id]
+        if checklist.get("completed"):
+            raise ValueError("완료된 체크리스트는 알림을 만들 수 없습니다.")
+
+        field = "notifiedDue" if phase == "due" else "notifiedFollowup"
+        notification_id = f"noti_checklist_{phase}_{checklist_id}"
+        if checklist.get(field) and notification_id in self.notifications:
+            return self.notifications[notification_id]
+
+        is_followup = phase == "followup"
+        time_label = _format_item_time(checklist["time"])
+        notification = {
+            "id": notification_id,
+            "familyId": checklist["familyId"],
+            "childId": checklist["childId"],
+            "type": "CHECKLIST",
+            "title": (
+                f"미완료 체크리스트가 있어요: {checklist['label']}"
+                if is_followup
+                else f"체크리스트 시간이에요: {checklist['label']}"
+            ),
+            "message": (
+                f"부모가 작성한 체크리스트의 예정 시간({checklist['date']} {time_label})에서 30분이 지났어요. "
+                f"\"{checklist['label']}\" 항목의 진행 상황을 확인해 주세요."
+                if is_followup
+                else f"부모가 작성한 체크리스트의 예정 시간({checklist['date']} {time_label})이 되었어요. "
+                f"\"{checklist['label']}\" 항목을 확인해 주세요."
+            ),
+            "evidence": f"체크리스트 일정: {checklist['date']} {checklist['time']} · 작성자: 부모",
+            "priority": "HIGH" if is_followup else "MEDIUM",
+            "status": "UNREAD",
+            "createdAt": now_iso(),
+        }
+        checklist[field] = True
+        self.notifications[notification_id] = notification
+        self._persist()
+        return notification
+
+    def upsert_thank_you_report(self, payload: dict) -> dict:
+        """수고리포트를 세션 기준으로 저장하고 알림도 같은 ID로 중복 없이 갱신한다."""
+        session_id = payload["sessionId"]
+        session = self.sessions.get(session_id)
+        family_id = payload.get("familyId") or (session or {}).get("familyId") or "family_1"
+        child_id = payload.get("childId") or (session or {}).get("childId") or "child_1"
+        report_id = f"thx_{session_id}"
+        previous = self.thank_you_reports.get(report_id, {})
+        incoming_sent_at = payload.get("sentAt")
+        if previous and incoming_sent_at and previous.get("sentAt", "") > incoming_sent_at:
+            return previous
+        sent_at = payload.get("sentAt") or previous.get("sentAt") or now_iso()
+        report = {
+            **previous,
+            "id": report_id,
+            "familyId": family_id,
+            "childId": child_id,
+            "sessionId": session_id,
+            "fromUserId": payload["fromUserId"],
+            "fromUserName": payload["fromUserName"],
+            "toCaregiverName": payload["toCaregiverName"],
+            "message": payload["message"],
+            "tone": payload.get("tone"),
+            "durationLabel": payload["durationLabel"],
+            "counts": payload.get("counts") or {},
+            "sentAt": sent_at,
+        }
+        self.thank_you_reports[report_id] = report
+
+        notification_id = f"noti_thx_{session_id}"
+        existing_notification = self.notifications.get(notification_id, {})
+        counts = report["counts"]
+        self.notifications[notification_id] = {
+            "id": notification_id,
+            "familyId": family_id,
+            "childId": child_id,
+            "type": "THANK_YOU",
+            "title": "수고리포트가 도착했어요",
+            "message": report["message"],
+            "evidence": (
+                f"{report['durationLabel']} 돌봄 · 수유 {counts.get('feeding', 0)}회 · "
+                f"기저귀 {counts.get('diaper', 0)}회 · 낮잠 {counts.get('sleep', 0)}회"
+            ),
+            "priority": "MEDIUM",
+            "status": existing_notification.get("status", "UNREAD"),
+            "createdAt": existing_notification.get("createdAt", sent_at),
+        }
+        self._persist()
+        return report
+
+    def get_thank_you_report(self, session_id: str) -> dict:
+        """세션 ID로 저장된 수고리포트를 조회한다."""
+        report_id = f"thx_{session_id}"
+        if report_id not in self.thank_you_reports:
+            raise KeyError("수고리포트를 찾을 수 없습니다.")
+        return self.thank_you_reports[report_id]
 
 
 store = DallaeStore()

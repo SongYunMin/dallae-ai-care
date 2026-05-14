@@ -12,11 +12,21 @@ from services.voice_parser import parse_voice_note_to_record
 AgentKind = str
 
 
+# 안전 정책과 말투 정책은 ADK instruction과 prompt 본문에 함께 넣어
+# 실제 모델 호출과 fallback 응답의 기준이 어긋나지 않게 한다.
 COMMON_SAFETY_POLICY = """
 반드시 제공된 아이 정보, 최신 기록, 가족 규칙, 돌봄자 권한 범위 안에서만 답한다.
 의료 진단, 병명 추정, 약물 처방은 하지 않는다.
 위험 신호가 있으면 보호자 또는 의료진 확인을 안내한다.
 응답은 JSON 객체 하나로만 반환한다.
+"""
+
+DALLAE_CUTE_TONE_POLICY = """
+[달래 말투 가이드]
+- 기본 응답은 달래가 옆에서 같이 챙겨주는 것처럼 다정하고 귀엽게 쓴다.
+- "~해요", "~좋아요", "살짝", "꼬옥", "차근차근" 같은 부드러운 표현을 자연스럽게 사용한다.
+- 과한 아기말, 반복 감탄사, 이모지는 쓰지 않는다.
+- 약물, 의료, 위험 신호, 보호자 확인 안내는 귀여운 표현보다 명확성과 단호함을 우선한다.
 """
 
 
@@ -91,6 +101,7 @@ class CareChatAgent(BaseDallaeAgent):
     instruction = f"""
 너는 '달래'의 영유아 돌봄 Q&A 에이전트다.
 {COMMON_SAFETY_POLICY}
+{DALLAE_CUTE_TONE_POLICY}
 최근 기록, 세션 기록, 가족 규칙을 근거로 1~3문장으로 답한다.
 """
 
@@ -122,10 +133,13 @@ class CareChatAgent(BaseDallaeAgent):
                 "[돌보는 사람 질문]",
                 user_message,
                 "",
+                "[응답 말투]",
+                DALLAE_CUTE_TONE_POLICY.strip(),
+                "",
                 "[반환 형식]",
                 json.dumps(
                     {
-                        "answer": "1~3문장 한국어 답변",
+                        "answer": "1~3문장 한국어 답변. 일반 상황은 귀엽고 다정하게, 위험 상황은 명확하고 단호하게 작성",
                         "nextActions": ["바로 할 일"],
                         "ruleReminders": ["적용되는 가족 규칙"],
                         "recordSuggestions": ["기록하면 좋은 내용"],
@@ -172,8 +186,8 @@ class CareChatAgent(BaseDallaeAgent):
         latest = context.get("latestStatus", {})
         if "유튜브" in user_message or "영상" in user_message:
             return {
-                "answer": "영상은 부모가 허용한 경우가 아니면 보여주지 않는 규칙이 있어요. 먼저 기저귀와 졸림 신호를 확인해보세요.",
-                "nextActions": ["기저귀 상태를 확인하세요.", "좋아하는 장난감으로 먼저 달래보세요.", "조용한 곳에서 안아주세요."],
+                "answer": "영상은 부모가 허용한 경우가 아니면 보여주지 않는 약속이 있어요. 먼저 기저귀랑 졸림 신호를 살짝 확인해볼게요.",
+                "nextActions": ["기저귀 상태를 확인해 주세요.", "좋아하는 장난감으로 먼저 달래보세요.", "조용한 곳에서 꼬옥 안아주세요."],
                 "ruleReminders": [rule for rule in rules if "영상" in rule or "유튜브" in rule][:1],
                 "recordSuggestions": ["보챈 시간과 달랜 방법을 기록해두면 좋아요."],
                 "proactiveNotifications": [],
@@ -190,21 +204,21 @@ class CareChatAgent(BaseDallaeAgent):
             }
         if "수유" in user_message or "분유" in user_message or "먹" in user_message:
             feeding = latest.get("feeding")
-            answer = "최근 수유 기록이 아직 없어요. 보호자에게 마지막 수유 시간을 확인해 주세요."
+            answer = "최근 수유 기록이 아직 없어요. 보호자에게 마지막 수유 시간을 차근차근 확인해 주세요."
             if feeding:
                 amount = f" {feeding.get('amountMl')}ml" if feeding.get("amountMl") else ""
-                answer = f"마지막 수유 기록은 {amount.strip() or '수유'}로 남아 있어요."
+                answer = f"마지막 수유 기록은 {amount.strip() or '수유'}로 남아 있어요. 배고픈 신호가 보이면 살짝 확인해 주세요."
             return {
                 "answer": answer,
-                "nextActions": ["아이의 배고픈 신호를 확인하세요.", "수유했다면 기록을 남겨주세요."],
+                "nextActions": ["아이의 배고픈 신호를 확인해 주세요.", "수유했다면 기록을 남겨주세요."],
                 "ruleReminders": [],
                 "recordSuggestions": ["수유 시간과 양을 기록해두면 다음 돌봄자가 이어받기 쉬워요."],
                 "proactiveNotifications": [],
                 "escalation": "NONE",
             }
         return {
-            "answer": "최근 기록을 기준으로 먼저 기저귀, 졸림 신호, 마지막 수유 시간을 확인해보세요.",
-            "nextActions": ["기저귀 상태를 확인하세요.", "졸려 보이면 조용한 곳에서 안아주세요.", "필요하면 보호자에게 확인하세요."],
+            "answer": "최근 기록을 기준으로 기저귀, 졸림 신호, 마지막 수유 시간을 차근차근 확인해보면 좋아요.",
+            "nextActions": ["기저귀 상태를 확인해 주세요.", "졸려 보이면 조용한 곳에서 꼬옥 안아주세요.", "필요하면 보호자에게 확인해 주세요."],
             "ruleReminders": rules[:2],
             "recordSuggestions": ["방금 확인한 상태를 기록해두면 다음 보호자가 이어받기 쉽습니다."],
             "proactiveNotifications": [],
@@ -255,6 +269,7 @@ class ThankYouMessageAgent(BaseDallaeAgent):
     instruction = f"""
 너는 부모를 대신해 돌봄자에게 감사 메시지를 작성하는 에이전트다.
 {COMMON_SAFETY_POLICY}
+{DALLAE_CUTE_TONE_POLICY}
 이번 돌봄 세션 기록을 근거로 따뜻하지만 과장하지 않는 한국어 메시지를 작성한다.
 """
 
@@ -284,8 +299,11 @@ class ThankYouMessageAgent(BaseDallaeAgent):
                 "[기록 컨텍스트]",
                 json.dumps(context, ensure_ascii=False, indent=2),
                 "",
+                "[응답 말투]",
+                DALLAE_CUTE_TONE_POLICY.strip(),
+                "",
                 "[반환 형식]",
-                json.dumps({"message": "돌봄자에게 보낼 1~2문장 한국어 감사 메시지"}, ensure_ascii=False),
+                json.dumps({"message": "돌봄자에게 보낼 1~2문장 한국어 감사 메시지. 다정하고 귀엽지만 과장하지 않게 작성"}, ensure_ascii=False),
             ]
         )
 
@@ -300,7 +318,7 @@ class ThankYouMessageAgent(BaseDallaeAgent):
         stats = context.get("recordStats", {}).get("session", {})
         total = stats.get("total", 0)
         record_phrase = f" 기록 {total}건까지 꼼꼼히 남겨주셔서" if total else ""
-        return f"{caregiver_name}님, {duration_label} 동안 {child_name}를 돌봐주시고{record_phrase} 정말 고마워요. 덕분에 안심하고 이어받을 수 있어요."
+        return f"{caregiver_name}님, {duration_label} 동안 {child_name}를 돌봐주시고{record_phrase} 정말 고마워요. 덕분에 마음 놓고 차근차근 이어받을 수 있어요."
 
 
 # 이전 이름을 유지해 기존 테스트와 호출부가 깨지지 않게 한다.

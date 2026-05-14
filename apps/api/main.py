@@ -115,9 +115,52 @@ class ThankYouIn(BaseModel):
     careSessionId: str | None = None
 
 
+class ThankYouReportIn(BaseModel):
+    id: str | None = None
+    familyId: str = "family_1"
+    childId: str = "child_1"
+    sessionId: str
+    fromUserId: str
+    fromUserName: str
+    toCaregiverName: str
+    message: str
+    tone: str | None = None
+    durationLabel: str
+    counts: dict = {}
+    sentAt: str | None = None
+
+
 class RuleCreateIn(BaseModel):
     childId: str = "child_1"
     text: str
+
+
+class ChecklistCreateIn(BaseModel):
+    id: str | None = None
+    familyId: str
+    childId: str
+    date: str
+    time: str
+    label: str
+    kind: str
+    createdBy: str
+    createdByRole: str | None = None
+
+
+class ChecklistPatchIn(BaseModel):
+    date: str | None = None
+    time: str | None = None
+    label: str | None = None
+    kind: str | None = None
+    completed: bool | None = None
+    completedAt: str | None = None
+    completedBy: str | None = None
+    notifiedDue: bool | None = None
+    notifiedFollowup: bool | None = None
+
+
+class ChecklistNotificationIn(BaseModel):
+    phase: str = Field(pattern="^(due|followup)$")
 
 
 @app.get("/health")
@@ -138,25 +181,18 @@ def create_invite(family_id: str, payload: InviteCreateIn, request: Request) -> 
 
 @app.get("/api/invites/{token}")
 def get_invite(token: str) -> dict:
-    invite = store.invites.get(token)
+    invite = store.get_invite(token)
     if invite:
         return invite
-    # 데모 초대 링크는 백엔드 초기화 직후에도 바로 열 수 있게 허용한다.
-    if token.startswith("invite_"):
-        return {
-            "token": token,
-            "familyId": "family_1",
-            "childName": store.children["child_1"]["name"],
-            "relationship": "할머니",
-            "role": "CAREGIVER_EDITOR",
-            "status": "ACTIVE",
-        }
     raise HTTPException(status_code=404, detail="초대 링크를 찾을 수 없습니다.")
 
 
 @app.post("/api/invites/{token}/accept")
 def accept_invite(token: str, payload: InviteAcceptIn) -> dict:
-    return store.accept_invite(token, payload.model_dump())
+    try:
+        return store.accept_invite(token, payload.model_dump())
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc).strip("'")) from exc
 
 
 @app.get("/api/children/{child_id}/status")
@@ -187,6 +223,48 @@ def create_record(payload: RecordCreateIn) -> dict:
     return store.create_record(payload.model_dump())
 
 
+@app.get("/api/checklists")
+def list_checklists(childId: str = "child_1") -> dict:
+    return {"checklists": store.list_checklists(childId)}
+
+
+@app.post("/api/checklists")
+def create_checklist(payload: ChecklistCreateIn) -> dict:
+    if payload.createdBy not in store.members:
+        raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
+    return store.create_checklist(payload.model_dump())
+
+
+@app.patch("/api/checklists/{checklist_id}")
+def update_checklist(checklist_id: str, payload: ChecklistPatchIn) -> dict:
+    try:
+        return store.update_checklist(
+            checklist_id,
+            payload.model_dump(exclude_unset=True),
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc).strip("'")) from exc
+
+
+@app.delete("/api/checklists/{checklist_id}")
+def delete_checklist(checklist_id: str) -> dict:
+    try:
+        store.delete_checklist(checklist_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc).strip("'")) from exc
+    return {"id": checklist_id, "deleted": True}
+
+
+@app.post("/api/checklists/{checklist_id}/notifications")
+def create_checklist_notification(checklist_id: str, payload: ChecklistNotificationIn) -> dict:
+    try:
+        return store.create_checklist_notification(checklist_id, payload.phase)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc).strip("'")) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
 @app.post("/api/care-sessions/start")
 def start_care_session(payload: CareSessionStartIn) -> dict:
     member = store.members.get(payload.caregiverId)
@@ -202,6 +280,9 @@ def start_care_session(payload: CareSessionStartIn) -> dict:
         "startedAt": session["startedAt"],
         "status": session["status"],
         "caregiverName": session["caregiverName"],
+        "relationship": session["relationship"],
+        "inviteToken": session.get("inviteToken"),
+        "thankYouMessage": session.get("thankYouMessage"),
     }
 
 
@@ -225,7 +306,7 @@ def create_voice_note(session_id: str, payload: VoiceNoteIn) -> dict:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
     parsed = record_parser_agent.parse(payload.text)
     voice_id = f"voice_{len(store.voice_notes) + 1}"
-    store.voice_notes.append(
+    store.add_voice_note(
         {
             "id": voice_id,
             "careSessionId": session_id,
@@ -285,16 +366,15 @@ def evaluate_agent_notifications(payload: NotificationEvaluateIn) -> dict:
 
 @app.get("/api/children/{child_id}/agent-notifications")
 def list_agent_notifications(child_id: str) -> dict:
-    notifications = [n for n in store.notifications.values() if n["childId"] == child_id]
-    return {"notifications": sorted(notifications, key=lambda n: n["createdAt"], reverse=True)}
+    return {"notifications": store.list_notifications(child_id)}
 
 
 @app.patch("/api/agent-notifications/{notification_id}")
 def update_agent_notification(notification_id: str, payload: NotificationStatusIn) -> dict:
-    if notification_id not in store.notifications:
-        raise HTTPException(status_code=404, detail="알림을 찾을 수 없습니다.")
-    store.notifications[notification_id]["status"] = payload.status
-    return {"id": notification_id, "status": payload.status}
+    try:
+        return store.update_notification_status(notification_id, payload.status)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc).strip("'")) from exc
 
 
 @app.post("/api/thankyou")
@@ -314,6 +394,19 @@ async def create_thank_you_message(payload: ThankYouIn) -> dict:
     return await thank_you_message_agent.compose(payload.model_dump(), context)
 
 
+@app.post("/api/thank-you-reports")
+def upsert_thank_you_report(payload: ThankYouReportIn) -> dict:
+    return store.upsert_thank_you_report(payload.model_dump())
+
+
+@app.get("/api/thank-you-reports/{session_id}")
+def get_thank_you_report(session_id: str) -> dict:
+    try:
+        return store.get_thank_you_report(session_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc).strip("'")) from exc
+
+
 @app.get("/api/rules")
 def list_rules(childId: str = "child_1") -> dict:
     return {"rules": merge_default_and_parent_rules(store.rules.get(childId, []))}
@@ -322,8 +415,7 @@ def list_rules(childId: str = "child_1") -> dict:
 @app.post("/api/rules")
 def create_rule(payload: RuleCreateIn) -> dict:
     clean = payload.text.strip()
-    if clean and clean not in store.rules.setdefault(payload.childId, []):
-        store.rules[payload.childId].append(clean)
+    store.add_rule(payload.childId, clean)
     return {"rules": merge_default_and_parent_rules(store.rules.get(payload.childId, []))}
 
 

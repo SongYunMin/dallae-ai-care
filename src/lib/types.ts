@@ -82,7 +82,15 @@ export type ThankYouReport = {
 
 export type AgentNotification = {
   id: string;
-  type: 'ROUTINE_SUGGESTION' | 'MISSED_RECORD' | 'SCHEDULE' | 'RULE_REMINDER' | 'CARE_TIP' | 'CARE_PATTERN' | 'THANK_YOU';
+  type:
+    | 'ROUTINE_SUGGESTION'
+    | 'MISSED_RECORD'
+    | 'SCHEDULE'
+    | 'CHECKLIST'
+    | 'RULE_REMINDER'
+    | 'CARE_TIP'
+    | 'CARE_PATTERN'
+    | 'THANK_YOU';
   title: string;
   message: string;
   evidence?: string; // 근거 데이터 (예: "최근 7일 수면 기록 평균 21:45 → 어제 22:30")
@@ -106,6 +114,8 @@ export type CareSession = {
   caregiverId: string;
   caregiverName: string;
   relationship: string;
+  inviteToken?: string;
+  thankYouMessage?: string | null;
   startedAt: string;
   endedAt?: string;
   status: 'ACTIVE' | 'ENDED';
@@ -115,16 +125,19 @@ export type ChecklistKind = 'FEEDING' | 'DIAPER' | 'SLEEP' | 'MEDICINE' | 'BATH'
 
 export type ChecklistItem = {
   id: string;
+  familyId?: string;
+  childId?: string;
   date: string; // YYYY-MM-DD
   time: string; // HH:mm (24h)
   label: string;
   kind: ChecklistKind;
   completed: boolean;
-  completedAt?: string;
-  completedBy?: string;
+  completedAt?: string | null;
+  completedBy?: string | null;
   notifiedDue?: boolean;
   notifiedFollowup?: boolean;
   createdBy: string;
+  createdByRole?: UserRole;
 };
 
 export type Invite = {
@@ -134,4 +147,6 @@ export type Invite = {
   relationship: string;
   role: UserRole;
   status: 'ACTIVE' | 'ACCEPTED';
+  memo?: string | null;
+  thankYouMessage?: string | null;
 };

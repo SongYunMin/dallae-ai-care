@@ -13,6 +13,12 @@ node_modules
 apps/api/.venv/
 apps/api/dallae.db
 dallae.db
+dallae-store.json
+dallae-store.json.bak
+apps/api/dallae-store.json
+apps/api/dallae-store.json.bak
+*.store.json
+*.store.json.bak
 __pycache__/
 *.py[cod]
 .pytest_cache/

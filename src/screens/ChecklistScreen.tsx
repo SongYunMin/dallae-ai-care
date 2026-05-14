@@ -28,7 +28,7 @@ export function ChecklistScreen() {
         <p className="text-xs font-medium text-foreground/70">돌봄 시간표</p>
         <h1 className="text-xl font-bold mt-1">돌봄 체크리스트</h1>
         <p className="text-[12px] text-muted-foreground mt-1 leading-snug">
-          시간이 되면 자동으로 알림이 와요. 지난 시간은 흐리게 표시되고, 완료하면 체크돼요.
+          부모가 정한 시간이 되면 알림 목록에 쌓여요. 지난 시간은 흐리게 표시되고, 완료하면 체크돼요.
         </p>
       </header>
 
@@ -79,7 +79,7 @@ export function ChecklistScreen() {
         ))}
 
         <p className="text-[11px] text-center text-muted-foreground py-3">
-          알림은 앱이 켜진 동안 토스트로 도착해요.
+          알림은 앱이 켜진 동안 토스트와 알림 목록으로 도착해요.
         </p>
       </div>
     </div>
@@ -249,7 +249,7 @@ function NewItemForm({
       </button>
       <p className="text-[10.5px] text-muted-foreground flex items-start gap-1">
         <Bell size={11} className="mt-0.5 shrink-0" />
-        설정한 시간이 되면 푸시 알림으로 알려드려요.
+        설정한 시간이 되면 홈의 알림 목록에도 쌓여요.
       </p>
     </form>
   );

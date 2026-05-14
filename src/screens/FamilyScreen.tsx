@@ -17,7 +17,8 @@ export function FamilyScreen() {
   const [role, setRole] = useState<UserRole>('CAREGIVER_EDITOR');
 
   const generate = async () => {
-    const r = await createInvite({ relationship, role });
+    const thankYouMessage = parentThankYouMessage.trim();
+    const r = await createInvite({ relationship, role, memo: thankYouMessage || undefined });
     setInvite({ token: r.token, url: r.inviteUrl });
     toast('초대 링크가 생성되었어요');
   };
@@ -101,6 +102,24 @@ export function FamilyScreen() {
               </button>
             </div>
           </div>
+          <label className="block">
+            <span className="text-xs font-semibold flex items-center gap-1">
+              <Heart size={13} className="text-coral-foreground" />
+              돌봄 종료 감사 메시지
+            </span>
+            <textarea
+              value={parentThankYouMessage}
+              onChange={(e) => setParentThankYouMessage(e.target.value)}
+              rows={4}
+              placeholder="예) 오늘도 우리 아이 돌봐주셔서 정말 감사해요. 덕분에 마음 놓고 일할 수 있었어요."
+              className="mt-1 w-full p-3 rounded-xl bg-cream border border-border text-sm leading-relaxed resize-none focus:outline-none"
+            />
+            <span className="block text-[10px] text-muted-foreground text-right mt-1">
+              {parentThankYouMessage.trim().length === 0
+                ? '비워두면 돌봄 기록을 바탕으로 AI가 작성해요'
+                : `${parentThankYouMessage.trim().length}자 · 이 초대 링크의 감사 메시지로 저장돼요`}
+            </span>
+          </label>
           <button
             onClick={generate}
             className="w-full h-12 rounded-xl bg-primary text-primary-foreground font-semibold flex items-center justify-center gap-2"
@@ -125,29 +144,6 @@ export function FamilyScreen() {
               </div>
             </div>
           )}
-        </div>
-
-        <div className="rounded-3xl bg-card shadow-card p-4 space-y-2">
-          <div className="flex items-center gap-2">
-            <Heart size={16} className="text-coral-foreground" />
-            <h2 className="font-bold text-sm">돌봄 종료 시 보낼 감사 메시지</h2>
-          </div>
-          <p className="text-[11px] text-muted-foreground leading-relaxed">
-            돌봄이 끝나면 자동으로 전송돼요. 비워두면 AI가 대신 작성해 보냅니다.
-            돌봄 종료 전까지 언제든 수정할 수 있어요.
-          </p>
-          <textarea
-            value={parentThankYouMessage}
-            onChange={(e) => setParentThankYouMessage(e.target.value)}
-            rows={4}
-            placeholder="예) 오늘도 우리 아이 돌봐주셔서 정말 감사해요. 덕분에 마음 놓고 일할 수 있었어요."
-            className="w-full p-3 rounded-xl bg-cream border border-border text-sm leading-relaxed resize-none focus:outline-none"
-          />
-          <p className="text-[10px] text-muted-foreground text-right">
-            {parentThankYouMessage.trim().length === 0
-              ? 'AI가 자동으로 작성해 보내요'
-              : `${parentThankYouMessage.trim().length}자 · 직접 작성한 메시지로 보내요`}
-          </p>
         </div>
 
         <div className="rounded-3xl bg-card shadow-card p-4">

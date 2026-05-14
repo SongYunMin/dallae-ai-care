@@ -8,29 +8,49 @@ export function InviteScreen() {
   const { payload, navigate, setCurrentUser, startSession, toast } = useApp();
   const token = (payload as { token?: string })?.token ?? 'invite_demo123';
   const [invite, setInvite] = useState<Invite | null>(null);
+  const [inviteError, setInviteError] = useState('');
   const [name, setName] = useState('할머니');
   const [pin, setPin] = useState('1234');
 
   useEffect(() => {
-    getInvite(token).then(setInvite);
+    let mounted = true;
+    setInviteError('');
+    getInvite(token)
+      .then((next) => {
+        if (mounted) setInvite(next);
+      })
+      .catch(() => {
+        if (!mounted) return;
+        setInvite(null);
+        setInviteError('초대 링크를 찾을 수 없어요. 부모님이 보낸 최신 링크를 다시 열어주세요.');
+      });
+    return () => {
+      mounted = false;
+    };
   }, [token]);
 
   const onAccept = async () => {
-    const u = await acceptInvite(token, { name, emailOrPin: pin });
-    setCurrentUser({ id: u.userId, name: u.name, role: u.role });
-    const s = await startCareSession(u.name, u.userId);
-    startSession({
-      id: s.careSessionId,
-      familyId: u.familyId,
-      childId: u.childId,
-      caregiverId: u.userId,
-      caregiverName: u.name,
-      relationship: invite?.relationship ?? '돌봄자',
-      startedAt: s.startedAt,
-      status: 'ACTIVE',
-    });
-    toast(`${u.name}로 참여했어요. 돌봄 모드를 시작할게요.`);
-    navigate('careMode');
+    try {
+      const u = await acceptInvite(token, { name, emailOrPin: pin });
+      setCurrentUser({ id: u.userId, name: u.name, role: u.role });
+      const s = await startCareSession(u.name, u.userId);
+      startSession({
+        id: s.careSessionId,
+        familyId: u.familyId,
+        childId: u.childId,
+        caregiverId: u.userId,
+        caregiverName: u.name,
+        relationship: s.relationship ?? u.relationship ?? invite?.relationship ?? '돌봄자',
+        inviteToken: s.inviteToken ?? u.inviteToken,
+        thankYouMessage: s.thankYouMessage ?? u.thankYouMessage ?? invite?.thankYouMessage ?? invite?.memo,
+        startedAt: s.startedAt,
+        status: 'ACTIVE',
+      });
+      toast(`${u.name}로 참여했어요. 돌봄 모드를 시작할게요.`);
+      navigate('careMode');
+    } catch {
+      toast('초대 링크를 확인하지 못했어요. 최신 링크로 다시 시도해 주세요.');
+    }
   };
 
   return (
@@ -39,7 +59,7 @@ export function InviteScreen() {
         <IonMascot variant="hug" size={160} />
         <div>
           <p className="text-sm text-muted-foreground">
-            {invite?.childName ?? '하린'}이 가족의 돌봄에 초대되었어요.
+            {inviteError || `${invite?.childName ?? '하린'}이 가족의 돌봄에 초대되었어요.`}
           </p>
           <h1 className="text-2xl font-bold mt-1">함께 돌봐주세요</h1>
         </div>
@@ -63,7 +83,11 @@ export function InviteScreen() {
           />
         </div>
       </div>
-      <button onClick={onAccept} className="w-full h-14 rounded-2xl bg-primary text-primary-foreground font-semibold shadow-soft mt-4">
+      <button
+        onClick={onAccept}
+        disabled={Boolean(inviteError)}
+        className="w-full h-14 rounded-2xl bg-primary text-primary-foreground font-semibold shadow-soft mt-4 disabled:opacity-50 disabled:shadow-none"
+      >
         돌봄에 참여하기
       </button>
     </div>

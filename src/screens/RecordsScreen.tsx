@@ -26,8 +26,10 @@ const quickActions: { type: CareRecordType; label: string }[] = [
 
 export function RecordsScreen() {
   const { records, addRecord, currentUser, toast, navigate } = useApp();
+  const canWriteRecords = currentUser.role !== 'CAREGIVER_VIEWER';
 
   const handleQuick = async (type: CareRecordType) => {
+    if (!canWriteRecords) return;
     const r = await createCareRecord({
       type,
       recordedBy: currentUser.id,
@@ -43,35 +45,47 @@ export function RecordsScreen() {
       <header className="px-5 pt-8 pb-4 gradient-warm">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-bold">돌봄 기록</h1>
-          <button
-            onClick={() => navigate('recordNew')}
-            className="h-10 px-3 rounded-full bg-primary text-primary-foreground text-sm font-semibold flex items-center gap-1 shadow-soft"
-          >
-            <Plus size={16} /> 기록 추가
-          </button>
+          {canWriteRecords && (
+            <button
+              onClick={() => navigate('recordNew')}
+              className="h-10 px-3 rounded-full bg-primary text-primary-foreground text-sm font-semibold flex items-center gap-1 shadow-soft"
+            >
+              <Plus size={16} /> 기록 추가
+            </button>
+          )}
         </div>
-        <p className="text-xs text-muted-foreground mt-1">아래 버튼으로 빠르게 기록할 수 있어요</p>
+        <p className="text-xs text-muted-foreground mt-1">
+          {canWriteRecords ? '아래 버튼으로 빠르게 기록할 수 있어요' : '공유된 돌봄 기록을 조회할 수 있어요'}
+        </p>
       </header>
 
-      <div className="px-4 pt-4">
-        <div className="grid grid-cols-3 gap-2">
-          {quickActions.map((a) => {
-            const Icon = recordMeta[a.type].icon;
-            return (
-              <button
-                key={a.type}
-                onClick={() => handleQuick(a.type)}
-                className="rounded-2xl bg-card shadow-card py-3 flex flex-col items-center gap-1 active:scale-95 transition-transform"
-              >
-                <span className={`rounded-xl p-2 ${recordMeta[a.type].tone}`}>
-                  <Icon size={20} />
-                </span>
-                <span className="text-xs font-semibold">{a.label}</span>
-              </button>
-            );
-          })}
+      {canWriteRecords ? (
+        <div className="px-4 pt-4">
+          <div className="grid grid-cols-3 gap-2">
+            {quickActions.map((a) => {
+              const Icon = recordMeta[a.type].icon;
+              return (
+                <button
+                  key={a.type}
+                  onClick={() => handleQuick(a.type)}
+                  className="rounded-2xl bg-card shadow-card py-3 flex flex-col items-center gap-1 active:scale-95 transition-transform"
+                >
+                  <span className={`rounded-xl p-2 ${recordMeta[a.type].tone}`}>
+                    <Icon size={20} />
+                  </span>
+                  <span className="text-xs font-semibold">{a.label}</span>
+                </button>
+              );
+            })}
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className="px-4 pt-4">
+          <div className="rounded-2xl bg-muted/60 border border-border px-4 py-3 text-xs text-muted-foreground">
+            조회 전용 권한이라 새 기록은 남길 수 없어요.
+          </div>
+        </div>
+      )}
 
       <div className="px-4 pt-5 pb-6">
         <h2 className="text-sm font-bold text-foreground/80 mb-2 px-1">오늘의 기록</h2>
@@ -118,8 +132,14 @@ export function RecordNewScreen() {
   const [type, setType] = useState<CareRecordType>('FEEDING');
   const [amount, setAmount] = useState('');
   const [memo, setMemo] = useState('');
+  const canWriteRecords = currentUser.role !== 'CAREGIVER_VIEWER';
 
   const submit = async () => {
+    if (!canWriteRecords) {
+      toast('조회 전용 권한이라 기록할 수 없어요.');
+      navigate('records');
+      return;
+    }
     const r = await createCareRecord({
       type,
       amountMl: amount ? Number(amount) : undefined,
@@ -138,6 +158,7 @@ export function RecordNewScreen() {
       <header className="px-4 pt-6 pb-2 flex items-center gap-2 pl-16">
         <h1 className="text-lg font-bold">새 기록</h1>
       </header>
+      {canWriteRecords ? (
       <div className="px-5 space-y-4 pb-32">
         <div>
           <p className="text-sm font-semibold mb-2">기록 종류</p>
@@ -177,9 +198,17 @@ export function RecordNewScreen() {
           />
         </label>
       </div>
+      ) : (
+        <div className="px-5 pt-6">
+          <div className="rounded-2xl bg-muted/60 border border-border px-4 py-6 text-center">
+            <p className="text-sm font-semibold">조회 전용 권한이에요</p>
+            <p className="text-xs text-muted-foreground mt-1">기록 목록으로 돌아가 공유된 기록을 확인해 주세요.</p>
+          </div>
+        </div>
+      )}
       <div className="fixed bottom-0 inset-x-0 mx-auto max-w-[430px] p-4 bg-background/95 backdrop-blur border-t border-border safe-bottom">
         <button onClick={submit} className="w-full h-14 rounded-2xl bg-primary text-primary-foreground font-semibold shadow-soft">
-          기록 저장하기
+          {canWriteRecords ? '기록 저장하기' : '기록 목록으로'}
         </button>
       </div>
     </div>
