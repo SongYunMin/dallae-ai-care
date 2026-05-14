@@ -16,8 +16,8 @@ export function MobileShell({ children, hideNav = false }: { children: ReactNode
   };
 
   return (
-    <div className="min-h-dvh w-full flex justify-center" style={{ background: 'oklch(0.92 0.025 80)' }}>
-      <div className="relative mx-auto w-full max-w-[430px] min-h-dvh overflow-x-hidden bg-background shadow-frame flex flex-col">
+    <div className="h-dvh w-full flex justify-center overflow-hidden" style={{ background: 'oklch(0.92 0.025 80)' }}>
+      <div className="relative mx-auto w-full max-w-[430px] h-dvh overflow-hidden bg-background shadow-frame flex flex-col">
         {showBack && (
           <button
             onClick={onBack}
@@ -27,10 +27,10 @@ export function MobileShell({ children, hideNav = false }: { children: ReactNode
             <ChevronLeft size={22} className="text-foreground" />
           </button>
         )}
-        <main className={`flex-1 ${hideNav ? '' : 'pb-24'} safe-bottom`}>{children}</main>
+        <main className={`flex-1 overflow-y-auto overscroll-contain ${hideNav ? '' : 'pb-24'} safe-bottom`}>{children}</main>
         {!hideNav && <BottomNav />}
         {/* toasts */}
-        <div className="pointer-events-none fixed inset-x-0 bottom-24 mx-auto max-w-[430px] flex flex-col items-center gap-2 px-4 z-50">
+        <div className="pointer-events-none absolute inset-x-0 bottom-24 mx-auto max-w-[430px] flex flex-col items-center gap-2 px-4 z-50">
           {toasts.map((t) => (
             <div
               key={t.id}

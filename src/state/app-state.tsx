@@ -144,29 +144,32 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Polling: 체크리스트 시간이 되면 토스트로 푸시 알림
   const toastRef = useRef(toast);
   toastRef.current = toast;
+  const checklistRef = useRef(checklist);
+  checklistRef.current = checklist;
   useEffect(() => {
     const tick = () => {
-      const now = new Date();
-      setChecklist((arr) => {
-        let changed = false;
-        const next = arr.map((it) => {
-          if (it.completed) return it;
-          const due = itemDateTime(it);
-          const diffMin = (now.getTime() - due.getTime()) / 60000;
-          if (diffMin >= 0 && !it.notifiedDue) {
-            toastRef.current(`🔔 체크리스트 시간이에요 — ${it.label}`);
-            changed = true;
-            return { ...it, notifiedDue: true };
-          }
-          if (diffMin >= 30 && !it.notifiedFollowup) {
-            toastRef.current(`⏰ 아직 완료하지 않으셨어요 — ${it.label}`);
-            changed = true;
-            return { ...it, notifiedFollowup: true };
-          }
-          return it;
-        });
-        return changed ? next : arr;
-      });
+      const now = Date.now();
+      const updates = new Map<string, 'notifiedDue' | 'notifiedFollowup'>();
+      const messages: string[] = [];
+      for (const it of checklistRef.current) {
+        if (it.completed) continue;
+        const diffMin = (now - itemDateTime(it).getTime()) / 60000;
+        if (diffMin >= 0 && !it.notifiedDue) {
+          updates.set(it.id, 'notifiedDue');
+          messages.push(`🔔 체크리스트 시간이에요 — ${it.label}`);
+        } else if (diffMin >= 30 && !it.notifiedFollowup) {
+          updates.set(it.id, 'notifiedFollowup');
+          messages.push(`⏰ 아직 완료하지 않으셨어요 — ${it.label}`);
+        }
+      }
+      if (updates.size === 0) return;
+      setChecklist((arr) =>
+        arr.map((it) => {
+          const field = updates.get(it.id);
+          return field ? { ...it, [field]: true } : it;
+        }),
+      );
+      messages.forEach((m) => toastRef.current(m));
     };
     tick();
     const id = setInterval(tick, 30_000);
