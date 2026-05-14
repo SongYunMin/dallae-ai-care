@@ -116,12 +116,7 @@ export function CareModeScreen() {
       </header>
 
       <div className="px-4 pt-4 space-y-3">
-        <BabyStatusCard
-          caregiverName={session.caregiverName}
-          childName={child.name}
-          records={records}
-          checklist={checklist}
-        />
+        <BabyStatusCard records={records} checklist={checklist} />
 
         <div className="rounded-3xl bg-mint/30 border border-mint/50 p-4">
           <p className="text-[11px] font-bold tracking-wider text-mint-foreground">꼭 지킬 가족 규칙</p>
