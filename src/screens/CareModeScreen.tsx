@@ -118,15 +118,6 @@ export function CareModeScreen() {
       <div className="px-4 pt-4 space-y-3">
         <BabyStatusCard records={records} checklist={checklist} />
 
-        <div className="rounded-3xl bg-mint/30 border border-mint/50 p-4">
-          <p className="text-[11px] font-bold tracking-wider text-mint-foreground">꼭 지킬 가족 규칙</p>
-          <div className="mt-1.5 space-y-1">
-            {DEFAULT_RULES.map((r) => (
-              <p key={r} className="text-xs leading-snug">• {r}</p>
-            ))}
-          </div>
-        </div>
-
         <div className="rounded-3xl bg-card shadow-card p-4">
           <p className="font-bold text-sm mb-2">빠른 기록</p>
           <div className="grid grid-cols-2 gap-2">
@@ -168,8 +159,6 @@ export function CareModeScreen() {
             </button>
           </div>
         </div>
-
-        <AgentHelperPanel />
 
 
         {session.caregiverId === currentUser.id ? (
