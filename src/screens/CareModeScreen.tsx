@@ -116,15 +116,12 @@ export function CareModeScreen() {
       </header>
 
       <div className="px-4 pt-4 space-y-3">
-        <div className="rounded-3xl bg-card shadow-card p-4">
-          <p className="font-bold text-sm">아이 현재 상태</p>
-          <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
-            <div className="rounded-xl bg-cream p-2">마지막 수유<br /><span className="font-bold text-sm">오후 2:20 / 160ml</span></div>
-            <div className="rounded-xl bg-sky/40 p-2">마지막 낮잠<br /><span className="font-bold text-sm">오후 12:00 종료</span></div>
-            <div className="rounded-xl bg-mint/40 p-2">기저귀<br /><span className="font-bold text-sm">정상</span></div>
-            <div className="rounded-xl bg-coral/30 p-2">약<br /><span className="font-bold text-sm">기록 없음</span></div>
-          </div>
-        </div>
+        <BabyStatusCard
+          caregiverName={session.caregiverName}
+          childName={child.name}
+          records={records}
+          checklist={checklist}
+        />
 
         <div className="rounded-3xl bg-mint/30 border border-mint/50 p-4">
           <p className="text-[11px] font-bold tracking-wider text-mint-foreground">꼭 지킬 가족 규칙</p>
