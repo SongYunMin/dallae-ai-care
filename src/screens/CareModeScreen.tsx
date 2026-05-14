@@ -18,8 +18,7 @@ const quick: { type: CareRecordType; label: string }[] = [
 ];
 
 export function CareModeScreen() {
-  const { session, startSession, endSession, addRecord, currentUser, toast, navigate, child, records } = useApp();
-  void records;
+  const { session, startSession, endSession, addRecord, currentUser, toast, navigate, child, records, checklist } = useApp();
   const [text, setText] = useState('');
   const [tick, setTick] = useState(0);
 
