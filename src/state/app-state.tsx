@@ -71,6 +71,9 @@ type AppState = {
   invite: { token: string; url: string } | null;
   setInvite: (i: { token: string; url: string } | null) => void;
 
+  parentThankYouMessage: string;
+  setParentThankYouMessage: (m: string) => void;
+
   toasts: Toast[];
   toast: (text: string) => void;
 
@@ -107,6 +110,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [checklist, setChecklist] = useState<ChecklistItem[]>(() => makeMockChecklist('user_parent_1'));
   const [thankYouReports, setThankYouReports] = useState<ThankYouReport[]>([]);
+  const [parentThankYouMessage, setParentThankYouMessage] = useState<string>('');
 
   const navigate = useCallback((s: Screen, p?: unknown) => {
     setPayload(p ?? null);
@@ -191,6 +195,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setCurrentUser({ id: 'user_parent_1', name: '엄마', role: 'PARENT_ADMIN' });
       setHistory([]);
       setPayload(null);
+      setParentThankYouMessage('');
       setScreen('splash');
       toast('로그아웃했어요');
     },
@@ -217,6 +222,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     lastEndedSession,
     invite,
     setInvite,
+    parentThankYouMessage,
+    setParentThankYouMessage,
     toasts,
     toast,
     checklist,
