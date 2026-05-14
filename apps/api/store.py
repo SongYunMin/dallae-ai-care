@@ -4,7 +4,7 @@ import json
 import os
 import shutil
 import threading
-from datetime import datetime
+from datetime import date, datetime
 from json import JSONDecodeError
 from pathlib import Path
 from uuid import uuid4
@@ -22,6 +22,19 @@ def _format_item_time(time: str) -> str:
     period = "오전" if hour < 12 else "오후"
     display_hour = 12 if hour % 12 == 0 else hour % 12
     return f"{period} {display_hour}:{minute}"
+
+
+def _age_in_months(birth_date: str) -> int:
+    """생년월일을 기준으로 현재 시점의 만 개월 수를 계산한다."""
+    try:
+        born = date.fromisoformat(birth_date)
+    except ValueError:
+        return 0
+    today = datetime.fromisoformat(now_iso()).date()
+    months = (today.year - born.year) * 12 + today.month - born.month
+    if today.day < born.day:
+        months -= 1
+    return max(0, months)
 
 
 class DallaeStore:
@@ -119,6 +132,7 @@ class DallaeStore:
             "feedingType": "FORMULA",
             "allergies": "없음",
             "medicalNotes": "약은 부모 확인 후 복용",
+            "routineNotes": "밤 9시 취침, 3시간 간격 수유",
             "careNotes": "영상보다 장난감으로 달래기",
         }
         self.members["user_parent_1"] = {
@@ -189,26 +203,106 @@ class DallaeStore:
         child_id = "child_1"
         user_id = "user_parent_1"
         self.families[family_id] = {"id": family_id, "name": f"{payload['childName']}이 가족"}
-        self.children[child_id] = {
+        child = {
             "id": child_id,
             "familyId": family_id,
             "name": payload["childName"],
-            "ageInMonths": 6,
+            "ageInMonths": _age_in_months(payload["birthDate"]),
             "birthDate": payload["birthDate"],
             "feedingType": payload["feedingType"],
             "allergies": payload.get("allergies"),
             "medicalNotes": payload.get("medicalNotes"),
+            "routineNotes": payload.get("routineNotes"),
             "careNotes": payload.get("careNotes"),
         }
-        self.members[user_id] = {
+        self.children[child_id] = child
+        member = {
             "id": user_id,
             "familyId": family_id,
             "name": payload["parentName"],
             "relationship": "parent",
             "role": "PARENT_ADMIN",
         }
+        self.members[user_id] = member
+        care_note = (payload.get("careNotes") or "").strip()
+        self.rules[child_id] = [care_note] if care_note else []
         self._persist()
-        return {"familyId": family_id, "childId": child_id, "userId": user_id, "role": "PARENT_ADMIN"}
+        return {
+            "familyId": family_id,
+            "childId": child_id,
+            "userId": user_id,
+            "role": "PARENT_ADMIN",
+            "child": child,
+            "member": member,
+            "activeRules": self.rules.get(child_id, []),
+        }
+
+    def family_members(self, family_id: str) -> list[dict]:
+        """가족 화면이 mock 구성원 대신 저장소의 현재 멤버 목록을 쓰도록 반환한다."""
+        members = [member for member in self.members.values() if member["familyId"] == family_id]
+        return sorted(members, key=lambda member: (member["role"], member["name"], member["id"]))
+
+    def update_child(self, child_id: str, payload: dict) -> dict:
+        """아이 프로필 입력값을 부분 수정하고 생년월일 변경 시 개월 수도 다시 계산한다."""
+        if child_id not in self.children:
+            raise KeyError("아이를 찾을 수 없습니다.")
+        child = self.children[child_id]
+        for key in [
+            "name",
+            "birthDate",
+            "feedingType",
+            "allergies",
+            "medicalNotes",
+            "routineNotes",
+            "careNotes",
+        ]:
+            if key in payload:
+                child[key] = payload[key]
+        if "birthDate" in payload:
+            child["ageInMonths"] = _age_in_months(child.get("birthDate", ""))
+        self._persist()
+        return child
+
+    def update_member(self, family_id: str, member_id: str, payload: dict) -> dict:
+        """가족 구성원의 표시 정보와 역할을 수정하되 마지막 관리자 훼손은 막는다."""
+        member = self.members.get(member_id)
+        if not member or member.get("familyId") != family_id:
+            raise KeyError("가족 구성원을 찾을 수 없습니다.")
+        next_role = payload.get("role", member["role"])
+        if member["role"] == "PARENT_ADMIN" and next_role != "PARENT_ADMIN":
+            admins = [
+                item
+                for item in self.members.values()
+                if item.get("familyId") == family_id and item.get("role") == "PARENT_ADMIN" and item.get("id") != member_id
+            ]
+            if not admins:
+                raise ValueError("마지막 관리자 보호자는 역할을 변경할 수 없습니다.")
+        for key in ["name", "relationship", "role"]:
+            if key in payload:
+                member[key] = payload[key]
+        self._persist()
+        return member
+
+    def delete_member(self, family_id: str, member_id: str) -> None:
+        """구성원 목록에서는 즉시 제거하되 과거 기록/세션 문자열 참조는 보존한다."""
+        member = self.members.get(member_id)
+        if not member or member.get("familyId") != family_id:
+            raise KeyError("가족 구성원을 찾을 수 없습니다.")
+        if member.get("role") == "PARENT_ADMIN":
+            admins = [
+                item
+                for item in self.members.values()
+                if item.get("familyId") == family_id and item.get("role") == "PARENT_ADMIN" and item.get("id") != member_id
+            ]
+            if not admins:
+                raise ValueError("마지막 관리자 보호자는 삭제할 수 없습니다.")
+        if any(
+            session.get("caregiverId") == member_id and session.get("status") == "ACTIVE"
+            for session in self.sessions.values()
+        ):
+            raise ValueError("진행 중인 돌봄 세션의 돌봄자는 삭제할 수 없습니다.")
+        del self.members[member_id]
+        self._persist()
 
     def create_invite(self, family_id: str, payload: dict, origin: str) -> dict:
         token = f"invite_{uuid4().hex[:8]}"
@@ -228,22 +322,8 @@ class DallaeStore:
         return {"token": token, "inviteUrl": f"{origin.rstrip('/')}/invite/{token}"}
 
     def get_invite(self, token: str) -> dict | None:
-        """초대 토큰을 조회한다. 데모 토큰은 명시된 값만 허용해 임의 토큰 수락을 막는다."""
-        invite = self.invites.get(token)
-        if invite:
-            return invite
-        if token == "invite_demo123":
-            return {
-                "token": token,
-                "familyId": "family_1",
-                "childName": self.children["child_1"]["name"],
-                "relationship": "할머니",
-                "role": "CAREGIVER_EDITOR",
-                "status": "ACTIVE",
-                "memo": None,
-                "thankYouMessage": None,
-            }
-        return None
+        """초대 토큰을 조회한다. 저장되지 않은 토큰은 실제 초대로 간주하지 않는다."""
+        return self.invites.get(token)
 
     def accept_invite(self, token: str, payload: dict) -> dict:
         invite = self.get_invite(token)
@@ -265,7 +345,7 @@ class DallaeStore:
                 "thankYouMessage": member.get("thankYouMessage"),
             }
 
-        user_id = "user_grandma_1" if token == "invite_demo123" else f"user_{uuid4().hex[:8]}"
+        user_id = f"user_{uuid4().hex[:8]}"
         thank_you_message = invite.get("thankYouMessage") or invite.get("memo")
         member = {
             "id": user_id,
@@ -317,6 +397,24 @@ class DallaeStore:
         self._persist()
         return record
 
+    def update_record(self, record_id: str, payload: dict) -> dict:
+        """사용자가 입력한 돌봄 기록 필드만 부분 수정한다."""
+        if record_id not in self.records:
+            raise KeyError("돌봄 기록을 찾을 수 없습니다.")
+        record = self.records[record_id]
+        for key in ["type", "value", "amountMl", "memo", "photoUrl", "careSessionId"]:
+            if key in payload:
+                record[key] = payload[key]
+        self._persist()
+        return record
+
+    def delete_record(self, record_id: str) -> None:
+        """돌봄 기록을 목록과 상태 집계에서 제거한다."""
+        if record_id not in self.records:
+            raise KeyError("돌봄 기록을 찾을 수 없습니다.")
+        del self.records[record_id]
+        self._persist()
+
     def start_session(self, payload: dict) -> dict:
         member = self.members[payload["caregiverId"]]
         session_id = f"session_{uuid4().hex[:8]}"
@@ -335,6 +433,19 @@ class DallaeStore:
         self.sessions[session_id] = session
         self._persist()
         return session
+
+    def get_session(self, session_id: str) -> dict:
+        """세션 ID로 돌봄 세션을 조회한다."""
+        if session_id not in self.sessions:
+            raise KeyError("돌봄 세션을 찾을 수 없습니다.")
+        return self.sessions[session_id]
+
+    def latest_session(self, child_id: str) -> dict:
+        """리포트 직접 진입 시 마지막 세션을 조회한다."""
+        sessions = [session for session in self.sessions.values() if session["childId"] == child_id]
+        if not sessions:
+            raise KeyError("돌봄 세션을 찾을 수 없습니다.")
+        return sorted(sessions, key=lambda session: session["startedAt"], reverse=True)[0]
 
     def end_session(self, session_id: str, counts: dict | None = None) -> dict:
         session = self.sessions[session_id]
@@ -364,6 +475,27 @@ class DallaeStore:
         if text and text not in rules:
             rules.append(text)
             self._persist()
+        return rules
+
+    def update_rule(self, child_id: str, index: int, text: str) -> list[str]:
+        """부모가 추가한 규칙 목록에서 지정된 항목만 수정한다."""
+        rules = self.rules.setdefault(child_id, [])
+        if index < 0 or index >= len(rules):
+            raise IndexError("가족 규칙을 찾을 수 없습니다.")
+        clean = text.strip()
+        if not clean:
+            raise ValueError("가족 규칙은 비워둘 수 없습니다.")
+        rules[index] = clean
+        self._persist()
+        return rules
+
+    def delete_rule(self, child_id: str, index: int) -> list[str]:
+        """기본 안전 규칙이 아닌 부모 추가 규칙만 삭제한다."""
+        rules = self.rules.setdefault(child_id, [])
+        if index < 0 or index >= len(rules):
+            raise IndexError("가족 규칙을 찾을 수 없습니다.")
+        del rules[index]
+        self._persist()
         return rules
 
     def add_notification(self, family_id: str, child_id: str, payload: dict) -> dict:

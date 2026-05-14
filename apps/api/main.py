@@ -10,7 +10,7 @@ load_dotenv()
 
 from agents.dallae_agent import care_chat_agent, notification_agent, record_parser_agent, thank_you_message_agent
 from services.context_builder import build_agent_context
-from services.permission_service import require_care_session, require_record_write
+from services.permission_service import PARENT_ROLES, require_care_session, require_record_write
 from services.rules import merge_default_and_parent_rules
 from services.status_service import format_latest_status
 from store import now_iso, store
@@ -40,6 +40,18 @@ class ParentOnboardingIn(BaseModel):
     feedingType: str
     allergies: str | None = None
     medicalNotes: str | None = None
+    routineNotes: str | None = None
+    careNotes: str | None = None
+
+
+class ChildPatchIn(BaseModel):
+    actorId: str | None = None
+    name: str | None = None
+    birthDate: str | None = None
+    feedingType: str | None = Field(default=None, pattern="^(BREAST|FORMULA|MIXED|SOLID)$")
+    allergies: str | None = None
+    medicalNotes: str | None = None
+    routineNotes: str | None = None
     careNotes: str | None = None
 
 
@@ -54,6 +66,13 @@ class InviteAcceptIn(BaseModel):
     emailOrPin: str
 
 
+class FamilyMemberPatchIn(BaseModel):
+    actorId: str | None = None
+    name: str | None = None
+    relationship: str | None = None
+    role: str | None = Field(default=None, pattern="^(PARENT_ADMIN|PARENT_EDITOR|CAREGIVER_EDITOR|CAREGIVER_VIEWER)$")
+
+
 class RecordCreateIn(BaseModel):
     familyId: str
     childId: str
@@ -64,6 +83,16 @@ class RecordCreateIn(BaseModel):
     recordedBy: str
     recordedByName: str | None = None
     source: str
+    memo: str | None = None
+    photoUrl: str | None = None
+
+
+class RecordPatchIn(BaseModel):
+    actorId: str
+    careSessionId: str | None = None
+    type: str | None = None
+    value: str | None = None
+    amountMl: int | None = None
     memo: str | None = None
     photoUrl: str | None = None
 
@@ -135,6 +164,12 @@ class RuleCreateIn(BaseModel):
     text: str
 
 
+class RulePatchIn(BaseModel):
+    actorId: str | None = None
+    childId: str = "child_1"
+    text: str
+
+
 class ChecklistCreateIn(BaseModel):
     id: str | None = None
     familyId: str
@@ -168,15 +203,65 @@ def health() -> dict:
     return {"ok": True}
 
 
+def _require_parent_role(actor_id: str | None) -> None:
+    """관리성 수정 API는 부모 역할만 호출할 수 있게 최소 권한 검사를 둔다."""
+    actor = store.members.get(actor_id or "user_parent_1")
+    if not actor:
+        raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
+    if actor.get("role") not in PARENT_ROLES:
+        raise HTTPException(status_code=403, detail="관리 권한이 없습니다.")
+
+
+def _rules_response(child_id: str) -> dict:
+    parent_rules = store.rules.get(child_id, [])
+    return {
+        "rules": merge_default_and_parent_rules(parent_rules),
+        "parentRules": parent_rules,
+    }
+
+
 @app.post("/api/onboarding/parent")
 def create_parent_onboarding(payload: ParentOnboardingIn) -> dict:
-    return store.create_onboarding(payload.model_dump())
+    created = store.create_onboarding(payload.model_dump())
+    created["activeRules"] = merge_default_and_parent_rules(store.rules.get(created["childId"], []))
+    return created
 
 
 @app.post("/api/families/{family_id}/invites")
 def create_invite(family_id: str, payload: InviteCreateIn, request: Request) -> dict:
     origin = request.headers.get("origin") or "http://localhost:5173"
     return store.create_invite(family_id, payload.model_dump(), origin)
+
+
+@app.get("/api/families/{family_id}/members")
+def list_family_members(family_id: str) -> dict:
+    if family_id not in store.families:
+        raise HTTPException(status_code=404, detail="가족을 찾을 수 없습니다.")
+    return {"members": store.family_members(family_id)}
+
+
+@app.patch("/api/families/{family_id}/members/{member_id}")
+def update_family_member(family_id: str, member_id: str, payload: FamilyMemberPatchIn) -> dict:
+    _require_parent_role(payload.actorId)
+    patch = payload.model_dump(exclude_unset=True, exclude={"actorId"})
+    try:
+        return store.update_member(family_id, member_id, patch)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc).strip("'")) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@app.delete("/api/families/{family_id}/members/{member_id}")
+def delete_family_member(family_id: str, member_id: str, actorId: str | None = None) -> dict:
+    _require_parent_role(actorId)
+    try:
+        store.delete_member(family_id, member_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc).strip("'")) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return {"id": member_id, "deleted": True}
 
 
 @app.get("/api/invites/{token}")
@@ -200,10 +285,20 @@ def get_child_status(child_id: str) -> dict:
     child = store.children[child_id]
     records = store.child_records(child_id)
     return {
-        "child": {"id": child["id"], "name": child["name"], "ageInMonths": child["ageInMonths"]},
+        "child": child,
         "latestStatus": format_latest_status(records),
         "activeRules": merge_default_and_parent_rules(store.rules.get(child_id, [])),
     }
+
+
+@app.patch("/api/children/{child_id}")
+def update_child(child_id: str, payload: ChildPatchIn) -> dict:
+    _require_parent_role(payload.actorId)
+    patch = payload.model_dump(exclude_unset=True, exclude={"actorId"})
+    try:
+        return store.update_child(child_id, patch)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc).strip("'")) from exc
 
 
 @app.get("/api/records")
@@ -221,6 +316,42 @@ def create_record(payload: RecordCreateIn) -> dict:
     except PermissionError as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
     return store.create_record(payload.model_dump())
+
+
+def _require_record_mutation(record_id: str, actor_id: str) -> dict:
+    actor = store.members.get(actor_id)
+    if not actor:
+        raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
+    try:
+        require_record_write(actor)
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    record = store.records.get(record_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="돌봄 기록을 찾을 수 없습니다.")
+    if actor.get("role") not in PARENT_ROLES and record.get("recordedBy") != actor_id:
+        raise HTTPException(status_code=403, detail="본인이 작성한 기록만 수정할 수 있습니다.")
+    return record
+
+
+@app.patch("/api/records/{record_id}")
+def update_record(record_id: str, payload: RecordPatchIn) -> dict:
+    _require_record_mutation(record_id, payload.actorId)
+    patch = payload.model_dump(exclude_unset=True, exclude={"actorId"})
+    try:
+        return store.update_record(record_id, patch)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc).strip("'")) from exc
+
+
+@app.delete("/api/records/{record_id}")
+def delete_record(record_id: str, actorId: str) -> dict:
+    _require_record_mutation(record_id, actorId)
+    try:
+        store.delete_record(record_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc).strip("'")) from exc
+    return {"id": record_id, "deleted": True}
 
 
 @app.get("/api/checklists")
@@ -291,6 +422,22 @@ def end_care_session(session_id: str, payload: CareSessionEndIn) -> dict:
     if session_id not in store.sessions:
         raise HTTPException(status_code=404, detail="돌봄 세션을 찾을 수 없습니다.")
     return store.end_session(session_id, payload.counts)
+
+
+@app.get("/api/care-sessions/latest")
+def get_latest_care_session(childId: str = "child_1") -> dict:
+    try:
+        return store.latest_session(childId)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc).strip("'")) from exc
+
+
+@app.get("/api/care-sessions/{session_id}")
+def get_care_session(session_id: str) -> dict:
+    try:
+        return store.get_session(session_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc).strip("'")) from exc
 
 
 @app.post("/api/care-sessions/{session_id}/voice-notes")
@@ -409,14 +556,36 @@ def get_thank_you_report(session_id: str) -> dict:
 
 @app.get("/api/rules")
 def list_rules(childId: str = "child_1") -> dict:
-    return {"rules": merge_default_and_parent_rules(store.rules.get(childId, []))}
+    return _rules_response(childId)
 
 
 @app.post("/api/rules")
 def create_rule(payload: RuleCreateIn) -> dict:
     clean = payload.text.strip()
     store.add_rule(payload.childId, clean)
-    return {"rules": merge_default_and_parent_rules(store.rules.get(payload.childId, []))}
+    return _rules_response(payload.childId)
+
+
+@app.patch("/api/rules/{rule_index}")
+def update_rule(rule_index: int, payload: RulePatchIn) -> dict:
+    _require_parent_role(payload.actorId)
+    try:
+        store.update_rule(payload.childId, rule_index, payload.text)
+    except IndexError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return _rules_response(payload.childId)
+
+
+@app.delete("/api/rules/{rule_index}")
+def delete_rule(rule_index: int, childId: str = "child_1", actorId: str | None = None) -> dict:
+    _require_parent_role(actorId)
+    try:
+        store.delete_rule(childId, rule_index)
+    except IndexError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return _rules_response(childId)
 
 
 @app.get("/api/children/{child_id}/chat-suggestions")

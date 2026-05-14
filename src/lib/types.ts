@@ -28,6 +28,9 @@ export type AgentCareResponse = {
   recordSuggestions: string[];
   proactiveNotifications: string[];
   escalation: AgentEscalation;
+  agentKind?: string;
+  fallbackUsed?: boolean;
+  evidence?: string[];
 };
 
 export type Child = {
@@ -39,8 +42,13 @@ export type Child = {
   feedingType: 'BREAST' | 'FORMULA' | 'MIXED' | 'SOLID';
   allergies?: string;
   medicalNotes?: string;
+  routineNotes?: string;
   careNotes?: string;
 };
+
+export type ChildPatch = Partial<
+  Pick<Child, 'name' | 'birthDate' | 'feedingType' | 'allergies' | 'medicalNotes' | 'routineNotes' | 'careNotes'>
+>;
 
 export type CareRecord = {
   id: string;
@@ -58,12 +66,23 @@ export type CareRecord = {
   photoUrl?: string;
 };
 
+export type CareRecordPatch = {
+  careSessionId?: string | null;
+  type?: CareRecordType;
+  value?: string | null;
+  amountMl?: number | null;
+  memo?: string | null;
+  photoUrl?: string | null;
+};
+
 export type FamilyMember = {
   id: string;
   name: string;
   relationship: string;
   role: UserRole;
 };
+
+export type FamilyMemberPatch = Partial<Pick<FamilyMember, 'name' | 'relationship' | 'role'>>;
 
 export type ThankYouTone = 'WARM' | 'FRIENDLY' | 'POLITE' | 'CHEERFUL' | 'CONCISE';
 

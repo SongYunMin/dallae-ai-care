@@ -33,16 +33,129 @@ def test_onboarding_updates_child_status(monkeypatch, tmp_path):
             "birthDate": "2026-01-01",
             "feedingType": "MIXED",
             "medicalNotes": "해열제는 부모 확인 후",
+            "routineNotes": "밤 8시 취침",
             "careNotes": "낯선 소리에 민감함",
         },
     )
     status = client.get("/api/children/child_1/status")
+    rules = client.get("/api/rules?childId=child_1")
 
     assert onboard.status_code == 200
     assert onboard.json()["role"] == "PARENT_ADMIN"
+    assert onboard.json()["child"]["name"] == "민준"
+    assert onboard.json()["child"]["routineNotes"] == "밤 8시 취침"
+    assert onboard.json()["member"]["name"] == "아빠"
     assert status.status_code == 200
     assert status.json()["child"]["name"] == "민준"
+    assert status.json()["child"]["routineNotes"] == "밤 8시 취침"
     assert "약은 부모가 등록한 내용이 있을 때만 먹인다." in status.json()["activeRules"]
+    assert "낯선 소리에 민감함" in rules.json()["rules"]
+
+
+def test_family_members_are_listed_from_store(monkeypatch, tmp_path):
+    client = make_client(monkeypatch, tmp_path)
+
+    members = client.get("/api/families/family_1/members")
+
+    assert members.status_code == 200
+    assert any(item["id"] == "user_parent_1" for item in members.json()["members"])
+    assert any(item["id"] == "user_grandma_1" for item in members.json()["members"])
+
+
+def test_child_profile_can_be_updated_and_used_by_agent_context(monkeypatch, tmp_path):
+    client = make_client(monkeypatch, tmp_path)
+
+    updated = client.patch(
+        "/api/children/child_1",
+        json={
+            "name": "서아",
+            "birthDate": "2026-02-01",
+            "feedingType": "MIXED",
+            "allergies": "복숭아",
+            "medicalNotes": "해열제는 부모 확인 후",
+            "routineNotes": "오후 8시 취침",
+            "careNotes": "낯선 소리에 민감함",
+        },
+    )
+    status = client.get("/api/children/child_1/status")
+    context = context_builder.build_agent_context(
+        family_id="family_1",
+        child_id="child_1",
+        caregiver_id="user_parent_1",
+    )
+
+    assert updated.status_code == 200
+    assert updated.json()["name"] == "서아"
+    assert updated.json()["ageInMonths"] >= 0
+    assert status.json()["child"]["routineNotes"] == "오후 8시 취침"
+    assert context["child"]["name"] == "서아"
+    assert context["shareableChildFacts"]["careNotes"] == "낯선 소리에 민감함"
+
+
+def test_family_member_update_delete_guards_and_preserves_history(monkeypatch, tmp_path):
+    client = make_client(monkeypatch, tmp_path)
+    historical_record = client.post(
+        "/api/records",
+        json={
+            "familyId": "family_1",
+            "childId": "child_1",
+            "type": "NOTE",
+            "recordedBy": "user_grandma_1",
+            "recordedByName": "할머니",
+            "source": "MANUAL",
+            "memo": "삭제 전 기록",
+        },
+    ).json()
+
+    updated = client.patch(
+        "/api/families/family_1/members/user_grandma_1",
+        json={"name": "민지 이모", "relationship": "aunt", "role": "CAREGIVER_EDITOR"},
+    )
+    session = client.post(
+        "/api/care-sessions/start",
+        json={
+            "familyId": "family_1",
+            "childId": "child_1",
+            "caregiverId": "user_grandma_1",
+        },
+    )
+    blocked = client.delete("/api/families/family_1/members/user_grandma_1")
+    client.post(f"/api/care-sessions/{session.json()['careSessionId']}/end", json={"counts": {}})
+    deleted = client.delete("/api/families/family_1/members/user_grandma_1")
+    members = client.get("/api/families/family_1/members")
+    records = client.get("/api/records?childId=child_1")
+    session_detail = client.get(f"/api/care-sessions/{session.json()['careSessionId']}")
+    missing_chat_user = client.post(
+        "/api/chat",
+        json={
+            "familyId": "family_1",
+            "childId": "child_1",
+            "caregiverId": "user_grandma_1",
+            "message": "마지막 수유는 언제였어?",
+        },
+    )
+
+    assert updated.status_code == 200
+    assert updated.json()["name"] == "민지 이모"
+    assert session.status_code == 200
+    assert session.json()["caregiverName"] == "민지 이모"
+    assert session.json()["relationship"] == "aunt"
+    assert blocked.status_code == 409
+    assert deleted.status_code == 200
+    assert deleted.json() == {"id": "user_grandma_1", "deleted": True}
+    assert all(item["id"] != "user_grandma_1" for item in members.json()["members"])
+    assert next(item for item in records.json()["records"] if item["id"] == historical_record["id"])["recordedByName"] == "할머니"
+    assert session_detail.json()["caregiverName"] == "민지 이모"
+    assert missing_chat_user.status_code == 404
+
+
+def test_last_parent_admin_cannot_be_deleted(monkeypatch, tmp_path):
+    client = make_client(monkeypatch, tmp_path)
+
+    deleted = client.delete("/api/families/family_1/members/user_parent_1")
+
+    assert deleted.status_code == 409
+    assert deleted.json()["detail"] == "마지막 관리자 보호자는 삭제할 수 없습니다."
 
 
 def test_invite_flow_create_get_accept(monkeypatch, tmp_path):
@@ -235,6 +348,43 @@ def test_record_write_is_denied_for_viewer(monkeypatch, tmp_path):
     assert res.json()["detail"] == "기록 권한이 없습니다."
 
 
+def test_record_update_delete_refresh_status_and_authorization(monkeypatch, tmp_path):
+    client = make_client(monkeypatch, tmp_path)
+    created = client.post(
+        "/api/records",
+        json={
+            "familyId": "family_1",
+            "childId": "child_1",
+            "type": "FEEDING",
+            "amountMl": 150,
+            "recordedBy": "user_parent_1",
+            "recordedByName": "엄마",
+            "source": "MANUAL",
+            "memo": "분유 150ml",
+        },
+    ).json()
+
+    denied = client.patch(
+        f"/api/records/{created['id']}",
+        json={"actorId": "user_grandma_1", "memo": "남의 기록 수정"},
+    )
+    updated = client.patch(
+        f"/api/records/{created['id']}",
+        json={"actorId": "user_parent_1", "amountMl": 180, "memo": "분유 180ml"},
+    )
+    status = client.get("/api/children/child_1/status")
+    deleted = client.delete(f"/api/records/{created['id']}?actorId=user_parent_1")
+    records = client.get("/api/records?childId=child_1")
+
+    assert denied.status_code == 403
+    assert updated.status_code == 200
+    assert updated.json()["amountMl"] == 180
+    assert updated.json()["memo"] == "분유 180ml"
+    assert status.json()["latestStatus"]["feeding"] == "180ml"
+    assert deleted.status_code == 200
+    assert all(item["id"] != created["id"] for item in records.json()["records"])
+
+
 def test_care_session_voice_note_end_and_thankyou_flow(monkeypatch, tmp_path):
     client = make_client(monkeypatch, tmp_path)
 
@@ -274,6 +424,65 @@ def test_care_session_voice_note_end_and_thankyou_flow(monkeypatch, tmp_path):
     assert thank_you.status_code == 200
     assert "할머니" in thank_you.json()["message"]
     assert thank_you.json()["agentKind"] == "THANK_YOU_MESSAGE"
+
+
+def test_care_session_detail_and_latest_can_be_loaded(monkeypatch, tmp_path):
+    client = make_client(monkeypatch, tmp_path)
+
+    first = client.post(
+        "/api/care-sessions/start",
+        json={
+            "familyId": "family_1",
+            "childId": "child_1",
+            "caregiverId": "user_grandma_1",
+            "caregiverName": "할머니",
+        },
+    ).json()
+    second = client.post(
+        "/api/care-sessions/start",
+        json={
+            "familyId": "family_1",
+            "childId": "child_1",
+            "caregiverId": "user_grandma_1",
+            "caregiverName": "할머니",
+        },
+    ).json()
+
+    detail = client.get(f"/api/care-sessions/{first['careSessionId']}")
+    latest = client.get("/api/care-sessions/latest?childId=child_1")
+
+    assert detail.status_code == 200
+    assert detail.json()["id"] == first["careSessionId"]
+    assert latest.status_code == 200
+    assert latest.json()["id"] == second["careSessionId"]
+
+
+def test_voice_note_write_is_denied_for_viewer(monkeypatch, tmp_path):
+    client = make_client(monkeypatch, tmp_path)
+    main.store.members["viewer_1"] = {
+        "id": "viewer_1",
+        "familyId": "family_1",
+        "name": "조회자",
+        "relationship": "viewer",
+        "role": "CAREGIVER_VIEWER",
+    }
+    session = client.post(
+        "/api/care-sessions/start",
+        json={
+            "familyId": "family_1",
+            "childId": "child_1",
+            "caregiverId": "viewer_1",
+            "caregiverName": "조회자",
+        },
+    ).json()
+
+    voice = client.post(
+        f"/api/care-sessions/{session['careSessionId']}/voice-notes",
+        json={"text": "지금 분유 160ml 먹였어", "recordedBy": "viewer_1"},
+    )
+
+    assert voice.status_code == 403
+    assert voice.json()["detail"] == "기록 권한이 없습니다."
 
 
 def test_thank_you_report_endpoint_upserts_report_and_notification(monkeypatch, tmp_path):
@@ -407,6 +616,27 @@ def test_notifications_rules_status_and_suggestions(monkeypatch, tmp_path):
     assert patched.json()["status"] == "ACKED"
     assert suggestions.status_code == 200
     assert "마지막 수유는 언제였어?" in suggestions.json()["suggestions"]
+
+
+def test_parent_rules_can_be_updated_and_deleted_without_touching_defaults(monkeypatch, tmp_path):
+    client = make_client(monkeypatch, tmp_path)
+
+    listed = client.get("/api/rules?childId=child_1")
+    patched = client.patch(
+        "/api/rules/0",
+        json={"childId": "child_1", "text": "영상 대신 촉감 놀이 먼저 하기"},
+    )
+    deleted = client.delete("/api/rules/1?childId=child_1")
+    after = client.get("/api/rules?childId=child_1")
+
+    assert listed.status_code == 200
+    assert listed.json()["parentRules"] == ["영상보다 장난감으로 달래기", "자기 전에는 조명을 어둡게 해요"]
+    assert patched.status_code == 200
+    assert patched.json()["parentRules"][0] == "영상 대신 촉감 놀이 먼저 하기"
+    assert deleted.status_code == 200
+    assert deleted.json()["parentRules"] == ["영상 대신 촉감 놀이 먼저 하기"]
+    assert "약은 부모가 등록한 내용이 있을 때만 먹인다." in after.json()["rules"]
+    assert after.json()["parentRules"] == ["영상 대신 촉감 놀이 먼저 하기"]
 
 
 def test_checklist_api_persists_due_and_followup_notifications(monkeypatch, tmp_path):
