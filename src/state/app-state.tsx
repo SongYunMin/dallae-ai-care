@@ -99,6 +99,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [lastEndedSession, setLastEnded] = useState<CareSession | null>(null);
   const [invite, setInvite] = useState<{ token: string; url: string } | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const [checklist, setChecklist] = useState<ChecklistItem[]>(() => makeMockChecklist('user_parent_1'));
 
   const navigate = useCallback((s: Screen, p?: unknown) => {
     setPayload(p ?? null);
