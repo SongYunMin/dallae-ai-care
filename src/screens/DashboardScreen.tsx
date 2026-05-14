@@ -48,6 +48,24 @@ export function DashboardScreen() {
   const unread = notifications.filter((n) => n.status === "UNREAD");
   const topNotis = unread.slice(0, 3);
 
+  const ageDays = Math.max(
+    0,
+    Math.floor((Date.now() - new Date(child.birthDate).getTime()) / (1000 * 60 * 60 * 24)),
+  );
+  const lastRecord = [...records].sort(
+    (a, b) => new Date(b.at).getTime() - new Date(a.at).getTime(),
+  )[0];
+  const RECORD_LABEL: Record<string, string> = {
+    FEEDING: "수유",
+    DIAPER: "기저귀",
+    SLEEP_START: "낮잠 시작",
+    SLEEP_END: "낮잠 종료",
+    MEDICINE: "약 복용",
+    CRYING: "울음",
+    BATH: "목욕",
+    PLAY: "놀이",
+  };
+
   return (
     <div className="flex flex-col">
       <header className="px-5 pt-8 pb-3 flex items-start justify-between gap-2">
