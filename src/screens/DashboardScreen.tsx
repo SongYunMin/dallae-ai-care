@@ -86,15 +86,13 @@ export function DashboardScreen() {
             </span>
           </div>
 
-          <div className="relative flex gap-3 items-start">
+          <div className="relative flex gap-3 items-center">
             <div className="rounded-2xl bg-card/80 p-1 shrink-0">
               <IonMascot variant="wink" size={56} />
             </div>
             <div className="flex-1">
               <p className="text-sm font-bold leading-snug">
-                안녕하세요, {currentUser.name}님.
-                <br />
-                아이온이 먼저 알려드릴 게 {unread.length}가지 있어요.
+                {child.name} · {child.ageInMonths}개월 ({ageDays}일)
               </p>
             </div>
             <button
