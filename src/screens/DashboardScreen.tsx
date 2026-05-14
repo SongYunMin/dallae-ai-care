@@ -242,8 +242,6 @@ export function DashboardScreen() {
           </div>
         </div>
 
-        {/* keep records reference for unused-var safety */}
-        <span className="hidden">{records.length}</span>
       </div>
     </div>
   );
