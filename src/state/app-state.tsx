@@ -1,9 +1,10 @@
-import { createContext, useContext, useState, useCallback, type ReactNode } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect, useRef, type ReactNode } from 'react';
 import type {
   AgentNotification,
   CareRecord,
   CareSession,
   ChatMessage,
+  ChecklistItem,
   FamilyMember,
   UserRole,
 } from '@/lib/types';
@@ -14,6 +15,7 @@ import {
   MOCK_RECORDS,
   PARENT_RULES,
 } from '@/lib/mock-data';
+import { itemDateTime, makeMockChecklist } from '@/lib/checklist';
 
 export type Screen =
   | 'splash'
@@ -27,7 +29,8 @@ export type Screen =
   | 'family'
   | 'invite'
   | 'rules'
-  | 'report';
+  | 'report'
+  | 'checklist';
 
 type Toast = { id: string; text: string };
 
