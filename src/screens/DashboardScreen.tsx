@@ -48,6 +48,24 @@ export function DashboardScreen() {
   const unread = notifications.filter((n) => n.status === "UNREAD");
   const topNotis = unread.slice(0, 3);
 
+  const ageDays = Math.max(
+    0,
+    Math.floor((Date.now() - new Date(child.birthDate).getTime()) / (1000 * 60 * 60 * 24)),
+  );
+  const lastRecord = [...records].sort(
+    (a, b) => new Date(b.at).getTime() - new Date(a.at).getTime(),
+  )[0];
+  const RECORD_LABEL: Record<string, string> = {
+    FEEDING: "수유",
+    DIAPER: "기저귀",
+    SLEEP_START: "낮잠 시작",
+    SLEEP_END: "낮잠 종료",
+    MEDICINE: "약 복용",
+    CRYING: "울음",
+    BATH: "목욕",
+    PLAY: "놀이",
+  };
+
   return (
     <div className="flex flex-col">
       <header className="px-5 pt-8 pb-3 flex items-start justify-between gap-2">
@@ -86,15 +104,13 @@ export function DashboardScreen() {
             </span>
           </div>
 
-          <div className="relative flex gap-3 items-start">
+          <div className="relative flex gap-3 items-center">
             <div className="rounded-2xl bg-card/80 p-1 shrink-0">
               <IonMascot variant="wink" size={56} />
             </div>
             <div className="flex-1">
               <p className="text-sm font-bold leading-snug">
-                안녕하세요, {currentUser.name}님.
-                <br />
-                아이온이 먼저 알려드릴 게 {unread.length}가지 있어요.
+                {child.name} · {child.ageInMonths}개월 ({ageDays}일)
               </p>
             </div>
             <button
@@ -146,18 +162,30 @@ export function DashboardScreen() {
         </div>
 
         {/* === Child latest status (compact) === */}
-        <div className="rounded-3xl bg-card shadow-card p-4 space-y-3">
+        <div className="rounded-3xl bg-card shadow-card p-4">
           <div className="flex items-center gap-2">
             <div className="rounded-xl bg-mint/40 p-0.5">
               <IonMascot variant="basic" size={32} />
             </div>
-            <div>
-              <p className="font-bold text-sm">
-                {child.name} · {child.ageInMonths}개월
+            <div className="flex-1">
+              <p className="text-[11px] font-bold tracking-wider text-foreground/60">
+                마지막 상태
               </p>
-              <p className="text-[11px] text-muted-foreground">
-                {child.feedingType === "FORMULA" ? "분유" : "수유"} · 컨디션 좋음
+              <p className="font-bold text-sm leading-snug">
+                {lastRecord
+                  ? `${RECORD_LABEL[lastRecord.type] ?? lastRecord.type}${
+                      lastRecord.amountMl ? ` ${lastRecord.amountMl}ml` : ""
+                    } · ${new Date(lastRecord.at).toLocaleTimeString("ko-KR", {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}`
+                  : "아직 기록이 없어요"}
               </p>
+              {lastRecord?.recordedBy && (
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  {lastRecord.recordedBy}님이 기록
+                </p>
+              )}
             </div>
           </div>
         </div>
@@ -214,8 +242,6 @@ export function DashboardScreen() {
           </div>
         </div>
 
-        {/* keep records reference for unused-var safety */}
-        <span className="hidden">{records.length}</span>
       </div>
     </div>
   );
