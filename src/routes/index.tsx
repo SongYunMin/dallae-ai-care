@@ -41,6 +41,7 @@ function Inner() {
       {screen === "invite" && <InviteScreen />}
       {screen === "rules" && <RulesScreen />}
       {screen === "report" && <ReportScreen />}
+      {screen === "checklist" && <ChecklistScreen />}
     </MobileShell>
   );
 }
