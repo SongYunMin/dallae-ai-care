@@ -121,36 +121,28 @@ export function DashboardScreen() {
           </button>
         </div>
 
-        {/* === Proactive Notifications Stack === */}
+        {/* === Proactive Notifications (compact) === */}
         {topNotis.length > 0 && (
-          <div className="rounded-3xl bg-card shadow-card p-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Sparkles size={16} className="text-primary" />
-                <h2 className="font-bold text-sm">아이온이 먼저 알려드려요</h2>
-              </div>
-              <button
-                onClick={() => navigate('notifications')}
-                className="text-xs text-primary font-semibold flex items-center"
-              >
-                전체 {unread.length} <ChevronRight size={14} />
-              </button>
+          <button
+            onClick={() => navigate('notifications')}
+            className="w-full rounded-3xl bg-card shadow-card p-4 flex items-center gap-3 active:scale-[0.99] transition-transform text-left"
+          >
+            <div className="rounded-2xl bg-primary/10 p-2.5 shrink-0 relative">
+              <Sparkles size={20} className="text-primary" />
+              {unread.length > 0 && (
+                <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-coral text-coral-foreground text-[10px] font-bold flex items-center justify-center">
+                  {unread.length}
+                </span>
+              )}
             </div>
-            <p className="text-[11px] text-muted-foreground -mt-1">
-              루틴 변화 · 빠진 기록 · 돌봄 패턴을 분석해서 보내드려요
-            </p>
-
-            <div className="space-y-2">
-              {topNotis.map((n) => (
-                <ProactiveCard
-                  key={n.id}
-                  n={n}
-                  onAck={() => setNotificationStatus(n.id, 'ACKED')}
-                  onAsk={() => askIon(n.title)}
-                />
-              ))}
+            <div className="flex-1 min-w-0">
+              <p className="font-bold text-sm">아이온이 먼저 알려드려요</p>
+              <p className="text-[11px] text-muted-foreground truncate mt-0.5">
+                {topNotis[0].title}
+              </p>
             </div>
-          </div>
+            <ChevronRight size={18} className="text-muted-foreground shrink-0" />
+          </button>
         )}
 
         {/* === Care mode CTA === */}
