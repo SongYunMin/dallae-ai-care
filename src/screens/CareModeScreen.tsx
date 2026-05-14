@@ -374,7 +374,7 @@ function BabyStatusCard({
         onClick={() => setOpen((v) => !v)}
         className="mt-3 w-full flex items-center justify-between text-xs font-semibold text-foreground/80 active:scale-[0.99] transition-transform"
       >
-        <span>기저귀 · 약 보기</span>
+        <span>기저귀 · 약 마지막 상태 보기</span>
         <ChevronDown size={16} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
 
@@ -396,60 +396,11 @@ function BabyStatusCard({
             <span className="font-bold text-sm">
               {lastMed ? formatTime(lastMed.at) : '기록 없음'}
             </span>
-          </div>
-        </div>
-      )}
-
-      <button
-        onClick={() => setOpen((v) => !v)}
-        className="mt-3 w-full flex items-center justify-between text-xs font-semibold text-foreground/80 active:scale-[0.99] transition-transform"
-      >
-        <span>마지막 상태들 보기</span>
-        <ChevronDown
-          size={16}
-          className={`transition-transform ${open ? 'rotate-180' : ''}`}
-        />
-      </button>
-
-      {open && (
-        <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
-          <div className="rounded-xl bg-cream p-2">
-            마지막 수유<br />
-            <span className="font-bold text-sm">
-              {lastFeed
-                ? `${formatTime(lastFeed.at)}${lastFeed.amountMl ? ` / ${lastFeed.amountMl}ml` : ''}`
-                : '기록 없음'}
-            </span>
-            {lastFeed && (
+            {lastMed && (
               <span className="block text-[10px] text-muted-foreground mt-0.5">
-                {formatRelative(lastFeed.at)}
+                {formatRelative(lastMed.at)}
               </span>
             )}
-          </div>
-          <div className="rounded-xl bg-sky/40 p-2">
-            마지막 낮잠<br />
-            <span className="font-bold text-sm">
-              {lastSleep
-                ? `${formatTime(lastSleep.at)} ${lastSleep.type === 'SLEEP_END' ? '종료' : '시작'}`
-                : '기록 없음'}
-            </span>
-          </div>
-          <div className="rounded-xl bg-mint/40 p-2">
-            기저귀<br />
-            <span className="font-bold text-sm">
-              {lastDiaper ? formatTime(lastDiaper.at) : '기록 없음'}
-            </span>
-            {lastDiaper && (
-              <span className="block text-[10px] text-muted-foreground mt-0.5">
-                {formatRelative(lastDiaper.at)}
-              </span>
-            )}
-          </div>
-          <div className="rounded-xl bg-coral/30 p-2">
-            약<br />
-            <span className="font-bold text-sm">
-              {lastMed ? formatTime(lastMed.at) : '기록 없음'}
-            </span>
           </div>
         </div>
       )}
