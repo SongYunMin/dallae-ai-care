@@ -1,11 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useApp } from '@/state/app-state';
 import { IonMascot } from '@/components/IonMascot';
 import { DEFAULT_RULES, QUICK_CAREGIVER_QUESTIONS } from '@/lib/mock-data';
 import { createCareRecord, endCareSession, parseTextToRecord, startCareSession } from '@/lib/api';
-import { formatDuration, formatTime } from '@/lib/date';
-import type { CareRecordType } from '@/lib/types';
-import { Mic, Send, Sparkles, MessageCircle, TrendingUp, ClipboardList } from 'lucide-react';
+import { formatDuration, formatTime, formatRelative } from '@/lib/date';
+import { itemDateTime, todayKey, KIND_META, formatItemTime } from '@/lib/checklist';
+import type { CareRecord, CareRecordType, ChecklistItem } from '@/lib/types';
+import { Mic, Send, Sparkles, MessageCircle, TrendingUp, ClipboardList, ChevronDown } from 'lucide-react';
 
 const quick: { type: CareRecordType; label: string }[] = [
   { type: 'FEEDING', label: '분유 먹였어요' },
