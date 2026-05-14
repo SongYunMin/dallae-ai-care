@@ -276,6 +276,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       };
       setNotifications((arr) => [noti, ...arr]);
     },
+    childMood,
+    setChildMood: (m) =>
+      setChildMoodState(m ? { ...m, at: new Date().toISOString() } : null),
   };
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
