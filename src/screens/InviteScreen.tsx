@@ -9,7 +9,7 @@ export function InviteScreen() {
   const token = (payload as { token?: string })?.token ?? 'invite_demo123';
   const [invite, setInvite] = useState<Invite | null>(null);
   const [inviteError, setInviteError] = useState('');
-  const [name, setName] = useState('할머니');
+  const [name, setName] = useState('');
   const [pin, setPin] = useState('1234');
 
   useEffect(() => {
@@ -17,7 +17,10 @@ export function InviteScreen() {
     setInviteError('');
     getInvite(token)
       .then((next) => {
-        if (mounted) setInvite(next);
+        if (!mounted) return;
+        setInvite(next);
+        // 초대 관계를 기본 이름으로 채워 잘못된 하드코딩 이름이 세션에 저장되지 않게 한다.
+        setName((current) => current.trim() || next.relationship);
       })
       .catch(() => {
         if (!mounted) return;
@@ -30,9 +33,14 @@ export function InviteScreen() {
   }, [token]);
 
   const onAccept = async () => {
+    const caregiverName = name.trim();
+    if (!caregiverName) {
+      toast('이름을 입력해 주세요.');
+      return;
+    }
     try {
-      const u = await acceptInvite(token, { name, emailOrPin: pin });
-      setCurrentUser({ id: u.userId, name: u.name, role: u.role });
+      const u = await acceptInvite(token, { name: caregiverName, emailOrPin: pin });
+      setCurrentUser({ id: u.userId, name: u.name, role: u.role, relationship: u.relationship });
       const s = await startCareSession(u.name, u.userId);
       startSession({
         id: s.careSessionId,
@@ -72,7 +80,7 @@ export function InviteScreen() {
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="이름"
+            placeholder="예: 할머니, 삼촌, 민지 이모"
             className="w-full h-12 px-4 rounded-xl bg-card border border-border"
           />
           <input
@@ -85,7 +93,7 @@ export function InviteScreen() {
       </div>
       <button
         onClick={onAccept}
-        disabled={Boolean(inviteError)}
+        disabled={Boolean(inviteError) || !name.trim()}
         className="w-full h-14 rounded-2xl bg-primary text-primary-foreground font-semibold shadow-soft mt-4 disabled:opacity-50 disabled:shadow-none"
       >
         돌봄에 참여하기

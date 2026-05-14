@@ -11,7 +11,7 @@ import {
 } from "@/lib/api";
 import { formatDuration, formatTime } from "@/lib/date";
 import { itemDateTime, todayKey, formatItemTime } from "@/lib/checklist";
-import type { CareRecord, CareRecordType, ChecklistItem } from "@/lib/types";
+import type { CareRecord, CareRecordType, CareSession, ChecklistItem } from "@/lib/types";
 import { nowKstIso } from "@/lib/kst";
 import { Mic, Send, X } from "lucide-react";
 import moodHappy from "@/assets/moods/happy.png";
@@ -52,6 +52,14 @@ const MOOD_OPTIONS: { emoji: string; label: string; image: string }[] = [
   { emoji: "😴", label: "졸림", image: moodSleepy },
   { emoji: "❓", label: "궁금", image: moodCurious },
 ];
+
+function caregiverDisplayName(session: CareSession) {
+  const name = session.caregiverName.trim();
+  const relationship = session.relationship.trim();
+  // 기존에 잘못 저장된 세션도 관계명으로 상단 표시를 보정한다.
+  if (name === "할머니" && relationship && relationship !== name) return relationship;
+  return name || relationship || "돌봄자";
+}
 
 export function CareModeScreen() {
   const {
@@ -211,7 +219,8 @@ export function CareModeScreen() {
     recognition.start();
   };
 
-  const title = session ? `${session.caregiverName}님이 돌보는 중` : `${currentUser.name}님의 기록 모드`;
+  const sessionDisplayName = session ? caregiverDisplayName(session) : currentUser.name;
+  const title = session ? `${sessionDisplayName}님이 돌보는 중` : `${currentUser.name}님의 기록 모드`;
   const subtitle = session
     ? `시작 ${formatTime(session.startedAt)} · ${formatDuration(session.startedAt)} 경과`
     : "세션 없이 남긴 기록도 돌보미와 함께 확인할 수 있어요";
@@ -429,7 +438,7 @@ export function CareModeScreen() {
           ) : (
           <div className="w-full rounded-2xl bg-muted/60 border border-border p-4 text-center">
             <p className="text-sm font-semibold text-foreground">
-              돌봄 종료는 {session.caregiverName}님만 할 수 있어요
+              돌봄 종료는 {sessionDisplayName}님만 할 수 있어요
             </p>
             <p className="text-xs text-muted-foreground mt-1">
               지금 돌보고 있는 분이 직접 종료하면 부모님이 준비한 감사 메시지가 전달돼요.

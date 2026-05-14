@@ -174,7 +174,7 @@ type AppState = {
   updateFamilyMember: (id: string, patch: FamilyMemberPatch) => Promise<void>;
   deleteFamilyMember: (id: string) => Promise<void>;
   currentUser: { id: string; name: string; role: UserRole };
-  setCurrentUser: (u: { id: string; name: string; role: UserRole }) => void;
+  setCurrentUser: (u: { id: string; name: string; role: UserRole; relationship?: string }) => void;
   applyOnboardingResult: (result: ParentOnboardingResult) => void;
   logout: () => void;
 
@@ -430,12 +430,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => clearInterval(id);
   }, [demoMode, mergeNotifications]);
 
-  const setCurrentUser = useCallback((u: { id: string; name: string; role: UserRole }) => {
-    setCurrentUserState(u);
+  const setCurrentUser = useCallback((u: { id: string; name: string; role: UserRole; relationship?: string }) => {
+    setCurrentUserState({ id: u.id, name: u.name, role: u.role });
     setFamilyMembers((arr) =>
       arr.find((a) => a.id === u.id)
-        ? arr
-        : [...arr, { id: u.id, name: u.name, relationship: '돌봄자', role: u.role }],
+        ? arr.map((member) =>
+            member.id === u.id
+              ? {
+                  ...member,
+                  name: u.name,
+                  relationship: u.relationship ?? member.relationship,
+                  role: u.role,
+                }
+              : member,
+          )
+        : [...arr, { id: u.id, name: u.name, relationship: u.relationship ?? '돌봄자', role: u.role }],
     );
   }, []);
 
