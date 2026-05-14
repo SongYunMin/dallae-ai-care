@@ -269,10 +269,6 @@ function whenLabel(targetMs: number): string {
   return m === 0 ? `${h}시간 뒤` : `${h}시간 ${m}분 뒤`;
 }
 
-function lastByType(records: CareRecord[], type: CareRecordType): CareRecord | undefined {
-  return [...records].filter((r) => r.type === type).sort((a, b) => b.at.localeCompare(a.at))[0];
-}
-
 function nextOfKind(checklist: ChecklistItem[], kind: ChecklistItem['kind']): ChecklistItem | null {
   const today = todayKey();
   const now = Date.now();
