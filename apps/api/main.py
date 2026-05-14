@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+
+# 로컬 개발에서는 apps/api/.env 파일을 읽어 ADK 키와 모델 설정을 주입한다.
+load_dotenv()
 
 from agents.dallae_agent import agent_service
 from services.context_builder import build_agent_context
