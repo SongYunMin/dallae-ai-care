@@ -2,4 +2,5 @@ fastapi
 uvicorn[standard]
 pydantic
 python-dotenv
+python-multipart
 google-adk>=1.28.1

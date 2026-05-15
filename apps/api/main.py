@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Literal
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator
 
@@ -14,6 +14,7 @@ from agents.dallae_agent import care_chat_agent, notification_agent, record_pars
 from services.context_builder import build_agent_context
 from services.permission_service import PARENT_ROLES, require_care_session, require_record_write
 from services.rules import merge_default_and_parent_rules
+from services import speech_transcriber
 from services.status_service import format_latest_status
 from store import now_iso, store
 
@@ -121,6 +122,11 @@ class CareSessionEndIn(BaseModel):
 class VoiceNoteIn(BaseModel):
     text: str
     recordedBy: str
+
+
+class SpeechTranscribeOut(BaseModel):
+    text: str
+    provider: str = "gemini"
 
 
 class ChatIn(BaseModel):
@@ -590,6 +596,25 @@ def create_voice_note(session_id: str, payload: VoiceNoteIn) -> dict:
         }
     )
     return {"voiceNoteId": voice_id, "parsedRecord": parsed, "createdRecord": created_record}
+
+
+@app.post("/api/speech/transcribe")
+async def transcribe_speech(audio: UploadFile = File(...)) -> SpeechTranscribeOut:
+    content_type = (audio.content_type or "application/octet-stream").split(";")[0]
+    if not content_type.startswith("audio/") and content_type != "video/webm":
+        raise HTTPException(status_code=400, detail="음성 파일만 업로드할 수 있어요.")
+    audio_bytes = await audio.read()
+    if not audio_bytes:
+        raise HTTPException(status_code=400, detail="전사할 음성 데이터가 비어 있어요.")
+    if len(audio_bytes) > 8 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="음성 파일은 8MB 이하로 보내 주세요.")
+    try:
+        text = await speech_transcriber.transcribe_audio_bytes(audio_bytes, content_type)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail="서버 음성 인식에 실패했어요.") from exc
+    return SpeechTranscribeOut(text=text)
 
 
 @app.post("/api/chat")

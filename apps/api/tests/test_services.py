@@ -1,9 +1,12 @@
+import pytest
+
 import services.context_builder as context_builder
 from agents.dallae_agent import DallaeAgentService, record_parser_agent, thank_you_message_agent
 from services.context_builder import build_agent_context, build_shareable_child_snapshot
 from services.notification_service import generate_agent_notification_candidates
 from services.permission_service import build_permission_scope
 from services.rules import DEFAULT_CARE_RULES, merge_default_and_parent_rules
+from services.speech_transcriber import _clean_transcript, _transcribe_audio_bytes_sync
 from services.status_service import get_latest_status
 from services.voice_parser import parse_voice_note_to_record
 from store import DallaeStore, now_iso
@@ -65,6 +68,17 @@ def test_voice_parser_recognizes_common_sleep_start_phrase():
     parsed = parse_voice_note_to_record("재웠어")
 
     assert parsed["type"] == "SLEEP_START"
+
+
+def test_speech_transcript_cleanup_removes_labels_and_quotes():
+    assert _clean_transcript('전사: "지금 분유 160미리 먹였어"') == "지금 분유 160미리 먹였어"
+
+
+def test_speech_transcriber_requires_google_key(monkeypatch):
+    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+
+    with pytest.raises(RuntimeError, match="서버 음성 인식 키"):
+        _transcribe_audio_bytes_sync(b"audio", "audio/webm")
 
 
 def test_now_iso_uses_kst_offset():

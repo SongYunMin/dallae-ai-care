@@ -74,6 +74,11 @@ export type VoiceNoteResult = {
   createdRecord: CareRecord;
 };
 
+export type SpeechTranscribeResult = {
+  text: string;
+  provider: string;
+};
+
 export type ThankYouMessageResult = {
   message: string;
   agentKind?: string;
@@ -373,6 +378,25 @@ export async function saveVoiceNote(
       body: JSON.stringify({ text, recordedBy }),
     },
   );
+}
+
+export async function transcribeSpeech(audio: Blob): Promise<SpeechTranscribeResult> {
+  const form = new FormData();
+  form.append('audio', audio, `voice-note.${audio.type.includes('mp4') ? 'mp4' : 'webm'}`);
+
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}/api/speech/transcribe`, {
+      method: 'POST',
+      body: form,
+    });
+  } catch (err) {
+    throw new Error(err instanceof Error ? err.message : 'API 서버에 연결할 수 없습니다.');
+  }
+  if (!res.ok) {
+    throw new ApiHttpError(res.status, await responseErrorMessage(res));
+  }
+  return (await res.json()) as SpeechTranscribeResult;
 }
 
 export async function createThankYouMessage(input: {

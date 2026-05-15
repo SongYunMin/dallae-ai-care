@@ -589,6 +589,37 @@ def test_care_session_voice_note_end_and_thankyou_flow(monkeypatch, tmp_path):
     assert thank_you.json()["agentKind"] == "THANK_YOU_MESSAGE"
 
 
+def test_speech_transcribe_endpoint_returns_server_transcript(monkeypatch, tmp_path):
+    client = make_client(monkeypatch, tmp_path)
+
+    async def fake_transcribe(audio_bytes: bytes, mime_type: str) -> str:
+        assert audio_bytes == b"fake-audio"
+        assert mime_type == "audio/webm"
+        return "지금 분유 160미리 먹였어"
+
+    monkeypatch.setattr(main.speech_transcriber, "transcribe_audio_bytes", fake_transcribe)
+
+    res = client.post(
+        "/api/speech/transcribe",
+        files={"audio": ("voice.webm", b"fake-audio", "audio/webm;codecs=opus")},
+    )
+
+    assert res.status_code == 200
+    assert res.json() == {"text": "지금 분유 160미리 먹였어", "provider": "gemini"}
+
+
+def test_speech_transcribe_endpoint_rejects_empty_audio(monkeypatch, tmp_path):
+    client = make_client(monkeypatch, tmp_path)
+
+    res = client.post(
+        "/api/speech/transcribe",
+        files={"audio": ("voice.webm", b"", "audio/webm")},
+    )
+
+    assert res.status_code == 400
+    assert res.json()["detail"] == "전사할 음성 데이터가 비어 있어요."
+
+
 def test_care_session_detail_and_latest_can_be_loaded(monkeypatch, tmp_path):
     client = make_client(monkeypatch, tmp_path)
 
