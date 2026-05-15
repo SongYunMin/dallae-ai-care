@@ -73,14 +73,14 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "달래 — AI 돌봄 에이전트" },
-      { name: "description", content: "아이를 함께 돌보는 AI 돌봄 에이전트, 달래." },
-      { name: "author", content: "Dallae" },
-      { property: "og:title", content: "달래 — AI 돌봄 에이전트" },
-      { property: "og:description", content: "아이를 함께 돌보는 AI 돌봄 에이전트, 달래." },
+      { title: "아이온 — AI 돌봄 에이전트" },
+      { name: "description", content: "아이를 함께 돌보는 AI 돌봄 에이전트, 아이온." },
+      { name: "author", content: "아이온" },
+      { property: "og:title", content: "아이온 — AI 돌봄 에이전트" },
+      { property: "og:description", content: "아이를 함께 돌보는 AI 돌봄 에이전트, 아이온." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
-      { name: "twitter:site", content: "@dallae" },
+      { name: "twitter:site", content: "@ion_care" },
     ],
     links: [
       // 전역 한글 폰트는 head에서 먼저 로드해 화면 진입 시 폰트 교체 흔들림을 줄인다.

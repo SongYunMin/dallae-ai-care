@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from typing import Literal
+
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 # 로컬 개발에서는 apps/api/.env 파일을 읽어 ADK 키와 모델 설정을 주입한다.
 load_dotenv()
@@ -31,6 +33,19 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+RecordType = Literal["FEEDING", "SLEEP_START", "SLEEP_END", "DIAPER", "MEDICINE", "CRYING", "NOTE"]
+RecordSource = Literal["MANUAL", "VOICE", "CHATBOT"]
+ChecklistKind = Literal["FEEDING", "DIAPER", "SLEEP", "MEDICINE", "BATH", "OTHER"]
+
+
+def _strip_required_text(value: str) -> str:
+    """공백만 들어온 필수 문자열이 저장소로 흘러가지 않도록 정리한다."""
+    clean = value.strip()
+    if not clean:
+        raise ValueError("비워둘 수 없습니다.")
+    return clean
 
 
 class ParentOnboardingIn(BaseModel):
@@ -77,12 +92,12 @@ class RecordCreateIn(BaseModel):
     familyId: str
     childId: str
     careSessionId: str | None = None
-    type: str
+    type: RecordType
     value: str | None = None
     amountMl: int | None = None
     recordedBy: str
     recordedByName: str | None = None
-    source: str
+    source: RecordSource
     memo: str | None = None
     photoUrl: str | None = None
 
@@ -90,7 +105,7 @@ class RecordCreateIn(BaseModel):
 class RecordPatchIn(BaseModel):
     actorId: str
     careSessionId: str | None = None
-    type: str | None = None
+    type: RecordType | None = None
     value: str | None = None
     amountMl: int | None = None
     memo: str | None = None
@@ -105,7 +120,7 @@ class CareSessionStartIn(BaseModel):
 
 
 class CareSessionEndIn(BaseModel):
-    counts: dict = {}
+    counts: dict = Field(default_factory=dict)
 
 
 class VoiceNoteIn(BaseModel):
@@ -136,7 +151,7 @@ class ThankYouIn(BaseModel):
     caregiverName: str
     childName: str
     durationLabel: str
-    counts: dict = {}
+    counts: dict = Field(default_factory=dict)
     tone: str = "WARM"
     familyId: str = "family_1"
     childId: str = "child_1"
@@ -155,13 +170,19 @@ class ThankYouReportIn(BaseModel):
     message: str
     tone: str | None = None
     durationLabel: str
-    counts: dict = {}
+    counts: dict = Field(default_factory=dict)
     sentAt: str | None = None
 
 
 class RuleCreateIn(BaseModel):
+    actorId: str | None = None
     childId: str = "child_1"
     text: str
+
+    @field_validator("text")
+    @classmethod
+    def validate_text(cls, value: str) -> str:
+        return _strip_required_text(value)
 
 
 class RulePatchIn(BaseModel):
@@ -169,29 +190,48 @@ class RulePatchIn(BaseModel):
     childId: str = "child_1"
     text: str
 
+    @field_validator("text")
+    @classmethod
+    def validate_text(cls, value: str) -> str:
+        return _strip_required_text(value)
+
 
 class ChecklistCreateIn(BaseModel):
+    actorId: str | None = None
     id: str | None = None
     familyId: str
     childId: str
     date: str
     time: str
     label: str
-    kind: str
+    kind: ChecklistKind
     createdBy: str
     createdByRole: str | None = None
 
+    @field_validator("label")
+    @classmethod
+    def validate_label(cls, value: str) -> str:
+        return _strip_required_text(value)
+
 
 class ChecklistPatchIn(BaseModel):
+    actorId: str | None = None
     date: str | None = None
     time: str | None = None
     label: str | None = None
-    kind: str | None = None
+    kind: ChecklistKind | None = None
     completed: bool | None = None
     completedAt: str | None = None
     completedBy: str | None = None
     notifiedDue: bool | None = None
     notifiedFollowup: bool | None = None
+
+    @field_validator("label")
+    @classmethod
+    def validate_label(cls, value: str | None) -> str | None:
+        if value is None:
+            return value
+        return _strip_required_text(value)
 
 
 class ChecklistNotificationIn(BaseModel):
@@ -212,7 +252,65 @@ def _require_parent_role(actor_id: str | None) -> None:
         raise HTTPException(status_code=403, detail="관리 권한이 없습니다.")
 
 
+def _get_family(family_id: str) -> dict:
+    """URL 또는 payload의 가족 ID가 실제 저장소에 있는지 확인한다."""
+    family = store.families.get(family_id)
+    if not family:
+        raise HTTPException(status_code=404, detail="가족을 찾을 수 없습니다.")
+    return family
+
+
+def _get_child(child_id: str) -> dict:
+    """아이 ID를 경계에서 확인해 KeyError가 500으로 새지 않게 한다."""
+    child = store.children.get(child_id)
+    if not child:
+        raise HTTPException(status_code=404, detail="아이를 찾을 수 없습니다.")
+    return child
+
+
+def _require_family_child(family_id: str, child_id: str) -> dict:
+    """가족과 아이가 서로 같은 범위에 있는지 확인한다."""
+    _get_family(family_id)
+    child = _get_child(child_id)
+    if child.get("familyId") != family_id:
+        raise HTTPException(status_code=404, detail="아이를 찾을 수 없습니다.")
+    return child
+
+
+def _get_member(member_id: str, detail: str = "사용자를 찾을 수 없습니다.") -> dict:
+    """구성원 ID를 조회하고 없으면 명시적인 404를 돌려준다."""
+    member = store.members.get(member_id)
+    if not member:
+        raise HTTPException(status_code=404, detail=detail)
+    return member
+
+
+def _require_member_in_family(member_id: str, family_id: str, detail: str = "사용자를 찾을 수 없습니다.") -> dict:
+    """다른 가족 구성원이 현재 가족의 데이터를 쓰지 못하게 막는다."""
+    member = _get_member(member_id, detail)
+    if member.get("familyId") != family_id:
+        raise HTTPException(status_code=403, detail="같은 가족 구성원만 접근할 수 있습니다.")
+    return member
+
+
+def _get_session(session_id: str) -> dict:
+    """세션 ID를 조회하고 저장소 KeyError 대신 API 404로 변환한다."""
+    session = store.sessions.get(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="돌봄 세션을 찾을 수 없습니다.")
+    return session
+
+
+def _require_session_scope(session_id: str, family_id: str, child_id: str) -> dict:
+    """기록과 세션의 가족/아이 범위가 섞이지 않도록 검증한다."""
+    session = _get_session(session_id)
+    if session.get("familyId") != family_id or session.get("childId") != child_id:
+        raise HTTPException(status_code=400, detail="돌봄 세션과 기록 대상이 일치하지 않습니다.")
+    return session
+
+
 def _rules_response(child_id: str) -> dict:
+    _get_child(child_id)
     parent_rules = store.rules.get(child_id, [])
     return {
         "rules": merge_default_and_parent_rules(parent_rules),
@@ -229,8 +327,12 @@ def create_parent_onboarding(payload: ParentOnboardingIn) -> dict:
 
 @app.post("/api/families/{family_id}/invites")
 def create_invite(family_id: str, payload: InviteCreateIn, request: Request) -> dict:
+    _get_family(family_id)
     origin = request.headers.get("origin") or "http://localhost:5173"
-    return store.create_invite(family_id, payload.model_dump(), origin)
+    try:
+        return store.create_invite(family_id, payload.model_dump(), origin)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc).strip("'")) from exc
 
 
 @app.get("/api/families/{family_id}/members")
@@ -282,7 +384,7 @@ def accept_invite(token: str, payload: InviteAcceptIn) -> dict:
 
 @app.get("/api/children/{child_id}/status")
 def get_child_status(child_id: str) -> dict:
-    child = store.children[child_id]
+    child = _get_child(child_id)
     records = store.child_records(child_id)
     return {
         "child": child,
@@ -303,14 +405,16 @@ def update_child(child_id: str, payload: ChildPatchIn) -> dict:
 
 @app.get("/api/records")
 def list_records(childId: str = "child_1") -> dict:
+    _get_child(childId)
     return {"records": store.child_records(childId)}
 
 
 @app.post("/api/records")
 def create_record(payload: RecordCreateIn) -> dict:
-    member = store.members.get(payload.recordedBy)
-    if not member:
-        raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
+    _require_family_child(payload.familyId, payload.childId)
+    member = _require_member_in_family(payload.recordedBy, payload.familyId)
+    if payload.careSessionId:
+        _require_session_scope(payload.careSessionId, payload.familyId, payload.childId)
     try:
         require_record_write(member)
     except PermissionError as exc:
@@ -336,7 +440,9 @@ def _require_record_mutation(record_id: str, actor_id: str) -> dict:
 
 @app.patch("/api/records/{record_id}")
 def update_record(record_id: str, payload: RecordPatchIn) -> dict:
-    _require_record_mutation(record_id, payload.actorId)
+    record = _require_record_mutation(record_id, payload.actorId)
+    if payload.careSessionId:
+        _require_session_scope(payload.careSessionId, record["familyId"], record["childId"])
     patch = payload.model_dump(exclude_unset=True, exclude={"actorId"})
     try:
         return store.update_record(record_id, patch)
@@ -356,29 +462,33 @@ def delete_record(record_id: str, actorId: str) -> dict:
 
 @app.get("/api/checklists")
 def list_checklists(childId: str = "child_1") -> dict:
+    _get_child(childId)
     return {"checklists": store.list_checklists(childId)}
 
 
 @app.post("/api/checklists")
 def create_checklist(payload: ChecklistCreateIn) -> dict:
-    if payload.createdBy not in store.members:
-        raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
-    return store.create_checklist(payload.model_dump())
+    _require_family_child(payload.familyId, payload.childId)
+    _require_member_in_family(payload.createdBy, payload.familyId)
+    _require_parent_role(payload.actorId or payload.createdBy)
+    return store.create_checklist(payload.model_dump(exclude={"actorId"}))
 
 
 @app.patch("/api/checklists/{checklist_id}")
 def update_checklist(checklist_id: str, payload: ChecklistPatchIn) -> dict:
+    _require_parent_role(payload.actorId)
     try:
         return store.update_checklist(
             checklist_id,
-            payload.model_dump(exclude_unset=True),
+            payload.model_dump(exclude_unset=True, exclude={"actorId"}),
         )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc).strip("'")) from exc
 
 
 @app.delete("/api/checklists/{checklist_id}")
-def delete_checklist(checklist_id: str) -> dict:
+def delete_checklist(checklist_id: str, actorId: str | None = None) -> dict:
+    _require_parent_role(actorId)
     try:
         store.delete_checklist(checklist_id)
     except KeyError as exc:
@@ -398,14 +508,16 @@ def create_checklist_notification(checklist_id: str, payload: ChecklistNotificat
 
 @app.post("/api/care-sessions/start")
 def start_care_session(payload: CareSessionStartIn) -> dict:
-    member = store.members.get(payload.caregiverId)
-    if not member:
-        raise HTTPException(status_code=404, detail="돌봄자를 찾을 수 없습니다.")
+    _require_family_child(payload.familyId, payload.childId)
+    member = _require_member_in_family(payload.caregiverId, payload.familyId, detail="돌봄자를 찾을 수 없습니다.")
     try:
         require_care_session(member)
     except PermissionError as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
-    session = store.start_session(payload.model_dump())
+    try:
+        session = store.start_session(payload.model_dump())
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     return {
         "careSessionId": session["id"],
         "startedAt": session["startedAt"],
@@ -419,13 +531,13 @@ def start_care_session(payload: CareSessionStartIn) -> dict:
 
 @app.post("/api/care-sessions/{session_id}/end")
 def end_care_session(session_id: str, payload: CareSessionEndIn) -> dict:
-    if session_id not in store.sessions:
-        raise HTTPException(status_code=404, detail="돌봄 세션을 찾을 수 없습니다.")
+    _get_session(session_id)
     return store.end_session(session_id, payload.counts)
 
 
 @app.get("/api/care-sessions/latest")
 def get_latest_care_session(childId: str = "child_1") -> dict:
+    _get_child(childId)
     try:
         return store.latest_session(childId)
     except KeyError as exc:
@@ -442,11 +554,8 @@ def get_care_session(session_id: str) -> dict:
 
 @app.post("/api/care-sessions/{session_id}/voice-notes")
 def create_voice_note(session_id: str, payload: VoiceNoteIn) -> dict:
-    if session_id not in store.sessions:
-        raise HTTPException(status_code=404, detail="돌봄 세션을 찾을 수 없습니다.")
-    member = store.members.get(payload.recordedBy)
-    if not member:
-        raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
+    session = _get_session(session_id)
+    member = _require_member_in_family(payload.recordedBy, session["familyId"])
     try:
         require_record_write(member)
     except PermissionError as exc:
@@ -462,7 +571,6 @@ def create_voice_note(session_id: str, payload: VoiceNoteIn) -> dict:
             "recordedAt": now_iso(),
         }
     )
-    session = store.sessions[session_id]
     # 음성 입력은 파싱 결과만 보여주지 않고 실제 돌봄 기록에도 남겨 다음 에이전트 근거로 사용한다.
     created_record = store.create_record(
         {
@@ -482,8 +590,10 @@ def create_voice_note(session_id: str, payload: VoiceNoteIn) -> dict:
 
 @app.post("/api/chat")
 async def ask_chat(payload: ChatIn) -> dict:
-    if payload.caregiverId not in store.members:
-        raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
+    _require_family_child(payload.familyId, payload.childId)
+    _require_member_in_family(payload.caregiverId, payload.familyId)
+    if payload.careSessionId:
+        _require_session_scope(payload.careSessionId, payload.familyId, payload.childId)
     context = build_agent_context(
         family_id=payload.familyId,
         child_id=payload.childId,
@@ -495,6 +605,10 @@ async def ask_chat(payload: ChatIn) -> dict:
 
 @app.post("/api/agent-notifications/evaluate")
 def evaluate_agent_notifications(payload: NotificationEvaluateIn) -> dict:
+    _require_family_child(payload.familyId, payload.childId)
+    _require_member_in_family(payload.caregiverId, payload.familyId)
+    if payload.careSessionId:
+        _require_session_scope(payload.careSessionId, payload.familyId, payload.childId)
     context = build_agent_context(
         family_id=payload.familyId,
         child_id=payload.childId,
@@ -513,6 +627,7 @@ def evaluate_agent_notifications(payload: NotificationEvaluateIn) -> dict:
 
 @app.get("/api/children/{child_id}/agent-notifications")
 def list_agent_notifications(child_id: str) -> dict:
+    _get_child(child_id)
     return {"notifications": store.list_notifications(child_id)}
 
 
@@ -526,12 +641,12 @@ def update_agent_notification(notification_id: str, payload: NotificationStatusI
 
 @app.post("/api/thankyou")
 async def create_thank_you_message(payload: ThankYouIn) -> dict:
-    session = store.sessions.get(payload.careSessionId) if payload.careSessionId else None
+    session = _get_session(payload.careSessionId) if payload.careSessionId else None
     caregiver_id = payload.caregiverId or (session or {}).get("caregiverId") or "user_parent_1"
     family_id = (session or {}).get("familyId") or payload.familyId
     child_id = (session or {}).get("childId") or payload.childId
-    if caregiver_id not in store.members:
-        raise HTTPException(status_code=404, detail="돌봄자를 찾을 수 없습니다.")
+    _require_family_child(family_id, child_id)
+    _require_member_in_family(caregiver_id, family_id, detail="돌봄자를 찾을 수 없습니다.")
     context = build_agent_context(
         family_id=family_id,
         child_id=child_id,
@@ -543,6 +658,9 @@ async def create_thank_you_message(payload: ThankYouIn) -> dict:
 
 @app.post("/api/thank-you-reports")
 def upsert_thank_you_report(payload: ThankYouReportIn) -> dict:
+    _require_family_child(payload.familyId, payload.childId)
+    _get_session(payload.sessionId)
+    _require_member_in_family(payload.fromUserId, payload.familyId)
     return store.upsert_thank_you_report(payload.model_dump())
 
 
@@ -561,13 +679,15 @@ def list_rules(childId: str = "child_1") -> dict:
 
 @app.post("/api/rules")
 def create_rule(payload: RuleCreateIn) -> dict:
-    clean = payload.text.strip()
-    store.add_rule(payload.childId, clean)
+    _get_child(payload.childId)
+    _require_parent_role(payload.actorId)
+    store.add_rule(payload.childId, payload.text)
     return _rules_response(payload.childId)
 
 
 @app.patch("/api/rules/{rule_index}")
 def update_rule(rule_index: int, payload: RulePatchIn) -> dict:
+    _get_child(payload.childId)
     _require_parent_role(payload.actorId)
     try:
         store.update_rule(payload.childId, rule_index, payload.text)
@@ -580,6 +700,7 @@ def update_rule(rule_index: int, payload: RulePatchIn) -> dict:
 
 @app.delete("/api/rules/{rule_index}")
 def delete_rule(rule_index: int, childId: str = "child_1", actorId: str | None = None) -> dict:
+    _get_child(childId)
     _require_parent_role(actorId)
     try:
         store.delete_rule(childId, rule_index)
@@ -590,6 +711,8 @@ def delete_rule(rule_index: int, childId: str = "child_1", actorId: str | None =
 
 @app.get("/api/children/{child_id}/chat-suggestions")
 def get_chat_suggestions(child_id: str, caregiverId: str) -> dict:
+    child = _get_child(child_id)
+    _require_member_in_family(caregiverId, child["familyId"])
     return {
         "suggestions": [
             "오늘 약 먹여야 해?",

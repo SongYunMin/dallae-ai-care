@@ -31,6 +31,7 @@ export function ChatScreen() {
   const [suggestionError, setSuggestionError] = useState<string | null>(null);
   const scrollerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const sentPendingQuestionKeysRef = useRef<Set<string>>(new Set());
 
   const localContext = useMemo(
     () => ({
@@ -104,10 +105,15 @@ export function ChatScreen() {
   };
 
   useEffect(() => {
-    if (pendingChatQuestion) {
-      send(pendingChatQuestion);
+    if (!pendingChatQuestion) return;
+    const key = pendingChatQuestion.sourceId ?? `question:${pendingChatQuestion.question}`;
+    if (sentPendingQuestionKeysRef.current.has(key)) {
       setPendingChatQuestion(null);
+      return;
     }
+    sentPendingQuestionKeysRef.current.add(key);
+    void send(pendingChatQuestion.question);
+    setPendingChatQuestion(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingChatQuestion]);
 

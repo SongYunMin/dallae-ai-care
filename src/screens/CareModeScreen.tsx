@@ -14,14 +14,14 @@ import { itemDateTime, todayKey, formatItemTime } from "@/lib/checklist";
 import type { CareRecord, CareRecordType, CareSession, ChecklistItem } from "@/lib/types";
 import { nowKstIso } from "@/lib/kst";
 import { Mic, Send, X } from "lucide-react";
-import moodHappy from "@/assets/moods/happy.png";
-import moodSurprised from "@/assets/moods/surprised.png";
-import moodSad from "@/assets/moods/sad.png";
-import moodAngry from "@/assets/moods/angry.png";
-import moodHungry from "@/assets/moods/hungry.png";
-import moodSick from "@/assets/moods/sick.png";
-import moodSleepy from "@/assets/moods/sleepy.png";
-import moodCurious from "@/assets/moods/curious.png";
+import moodAngry from "@/assets/moods/ion-angry.png";
+import moodCurious from "@/assets/moods/ion-curious.png";
+import moodHappy from "@/assets/moods/ion-happy.png";
+import moodHungry from "@/assets/moods/ion-hungry.png";
+import moodSad from "@/assets/moods/ion-sad.png";
+import moodSick from "@/assets/moods/ion-sick.png";
+import moodSleepy from "@/assets/moods/ion-sleepy.png";
+import moodSurprised from "@/assets/moods/ion-surprised.png";
 
 type SpeechRecognitionCtor = new () => {
   lang: string;
@@ -51,6 +51,10 @@ const TYPE_LABEL: Record<CareRecordType, string> = {
   CRYING: "울음",
   NOTE: "메모",
 };
+
+function recordTypeLabel(type: string): string {
+  return (TYPE_LABEL as Record<string, string>)[type] ?? "알 수 없는 기록";
+}
 
 const MOOD_OPTIONS: { emoji: string; label: string; image: string }[] = [
   { emoji: "😄", label: "기쁨", image: moodHappy },
@@ -115,11 +119,12 @@ export function CareModeScreen() {
   }, []);
 
   if (!session && !isParent) {
+    const viewerCopy = currentUser.role === "CAREGIVER_VIEWER" ? "조회 전용 돌봄 참여로 아이 상태를 확인할 수 있어요" : "지금 아이를 돌보는 분이 사용해요";
     return (
       <div className="px-5 pt-8 pb-6 space-y-4">
         <header>
           <h1 className="text-2xl font-bold">돌봄 모드</h1>
-          <p className="text-xs text-muted-foreground mt-1">지금 아이를 돌보는 분이 사용해요</p>
+          <p className="text-xs text-muted-foreground mt-1">{viewerCopy}</p>
         </header>
 
         <div className="rounded-3xl gradient-hero p-5 flex flex-col items-center text-center gap-3 shadow-card">
@@ -166,9 +171,8 @@ export function CareModeScreen() {
                 status: "ACTIVE",
               });
               toast("돌봄을 시작했어요. 안전이 우선이에요.");
-            } catch {
-              toast("돌봄자 초대 링크로 참여한 뒤 시작할 수 있어요.");
-              navigate("dashboard");
+            } catch (err) {
+              toast(err instanceof Error ? `돌봄 시작 실패: ${err.message}` : "돌봄자 초대 링크로 참여한 뒤 시작할 수 있어요.");
             }
           }}
           className="w-full h-14 rounded-2xl bg-primary text-primary-foreground font-semibold shadow-soft"
@@ -267,7 +271,7 @@ export function CareModeScreen() {
   };
 
   const sessionDisplayName = session ? caregiverDisplayName(session) : currentUser.name;
-  const title = session ? `${sessionDisplayName}님이 돌보는 중` : `${currentUser.name}님의 기록 모드`;
+  const title = session ? `${sessionDisplayName}님이 돌보는 중` : `${currentUser.name}님의 빠른 기록 모드`;
   const subtitle = session
     ? `시작 ${formatTime(session.startedAt)} · ${formatDuration(session.startedAt)} 경과`
     : "세션 없이 남긴 기록도 돌보미와 함께 확인할 수 있어요";
@@ -279,7 +283,7 @@ export function CareModeScreen() {
         <div className="flex items-center justify-between">
           <div>
             <p className="text-[11px] font-bold tracking-wider text-mint-foreground">
-              {session ? "돌봄 진행 중" : "부모 기록"}
+              {session ? "돌봄 진행 중" : "부모 빠른 기록"}
             </p>
             <h1 className="text-xl font-bold mt-0.5">{title}</h1>
             <p className="text-xs text-muted-foreground mt-1">{subtitle}</p>
@@ -330,7 +334,7 @@ export function CareModeScreen() {
                 <div key={record.id} className="rounded-2xl bg-cream px-3 py-2.5">
                   <div className="flex items-center justify-between gap-3">
                     <p className="text-sm font-semibold">
-                      {TYPE_LABEL[record.type]}
+                      {recordTypeLabel(record.type)}
                       {record.amountMl ? ` · ${record.amountMl}ml` : ""}
                     </p>
                     <p className="shrink-0 text-[11px] text-muted-foreground">
@@ -366,7 +370,7 @@ export function CareModeScreen() {
                 </button>
               </div>
               <p className="text-xs text-muted-foreground mb-3">
-                선택한 감정은 홈의 아이온 표정에도 반영돼요.
+                선택한 감정은 홈의 메인 프로필 사진에도 반영돼요.
               </p>
               <div className="grid grid-cols-4 gap-2">
                 {MOOD_OPTIONS.map((m) => (
@@ -398,7 +402,7 @@ export function CareModeScreen() {
                     <img
                       src={m.image}
                       alt={m.label}
-                      className="h-12 w-12 object-contain"
+                      className="h-16 w-16 object-contain"
                       draggable={false}
                     />
                     <span className="text-[10px] font-semibold">{m.label}</span>
@@ -436,12 +440,13 @@ export function CareModeScreen() {
               onClick={onTextRecord}
               disabled={!canWriteRecords || !text.trim()}
               className="h-12 w-12 rounded-full bg-foreground text-background flex items-center justify-center shrink-0 disabled:opacity-50"
+              aria-label="텍스트 기록 저장"
             >
               <Send size={18} />
             </button>
           </div>
           {!canWriteRecords && (
-            <p className="text-[11px] text-muted-foreground">조회 전용 권한이라 음성/텍스트 기록은 비활성화돼요.</p>
+            <p className="text-[11px] text-muted-foreground">조회 전용 돌봄 참여라 음성/텍스트 기록은 비활성화돼요.</p>
           )}
         </div>
 
@@ -550,7 +555,7 @@ export function CareModeScreen() {
           )
         ) : (
           <div className="w-full rounded-2xl bg-muted/60 border border-border p-4 text-center">
-            <p className="text-sm font-semibold text-foreground">부모 기록 모드로 저장 중이에요</p>
+            <p className="text-sm font-semibold text-foreground">부모 빠른 기록 모드로 저장 중이에요</p>
             <p className="text-xs text-muted-foreground mt-1">
               돌봄 세션을 만들지 않기 때문에 종료 리포트 없이 기록만 공유돼요.
             </p>

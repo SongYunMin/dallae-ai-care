@@ -8,7 +8,7 @@ const roleLabel: Record<UserRole, string> = {
   PARENT_ADMIN: '관리자',
   PARENT_EDITOR: '기록 가능',
   CAREGIVER_EDITOR: '기록 가능',
-  CAREGIVER_VIEWER: '조회만 가능',
+  CAREGIVER_VIEWER: '조회 전용 돌봄 참여',
 };
 
 const roleOptions: UserRole[] = ['PARENT_ADMIN', 'PARENT_EDITOR', 'CAREGIVER_EDITOR', 'CAREGIVER_VIEWER'];
@@ -23,6 +23,23 @@ const feedingOptions: Array<{ id: Child['feedingType']; label: string }> = [
 function feedingTypeLabel(type: Child['feedingType']) {
   // 서버에는 안정적인 enum 값을 유지하고, 보호자 화면에는 이해하기 쉬운 한글 라벨만 노출한다.
   return feedingOptions.find((option) => option.id === type)?.label ?? type;
+}
+
+const relationshipLabels: Record<string, string> = {
+  parent: '부모',
+  mother: '엄마',
+  father: '아빠',
+  grandmother: '할머니',
+  grandfather: '할아버지',
+  aunt: '이모/고모',
+  uncle: '삼촌',
+  caregiver: '돌봄자',
+  viewer: '조회 전용 돌봄자',
+};
+
+function relationshipLabel(value: string) {
+  // 저장소에는 안정적인 관계 키를 유지하고 화면에만 한국어 표시명을 적용한다.
+  return relationshipLabels[value] ?? value;
 }
 
 type ChildDraft = {
@@ -352,7 +369,7 @@ export function FamilyScreen() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="font-semibold text-sm truncate">{m.name}</p>
-                        <p className="text-[11px] text-muted-foreground truncate">{m.relationship}</p>
+                        <p className="text-[11px] text-muted-foreground truncate">{relationshipLabel(m.relationship)}</p>
                       </div>
                       <span className={`text-[10px] font-bold px-2 py-1 rounded-full ${roleTone(m.role)}`}>
                         {roleLabel[m.role]}
@@ -402,7 +419,7 @@ export function FamilyScreen() {
             <div className="grid grid-cols-2 gap-2">
               <button
                 onClick={() => setRole('CAREGIVER_EDITOR')}
-                className={`h-11 rounded-xl text-sm font-semibold border ${
+                className={`h-11 rounded-xl text-xs font-semibold border ${
                   role === 'CAREGIVER_EDITOR' ? 'bg-primary text-primary-foreground border-primary' : 'bg-card border-border'
                 }`}
               >
@@ -410,11 +427,11 @@ export function FamilyScreen() {
               </button>
               <button
                 onClick={() => setRole('CAREGIVER_VIEWER')}
-                className={`h-11 rounded-xl text-sm font-semibold border ${
+                className={`h-11 rounded-xl text-xs font-semibold border ${
                   role === 'CAREGIVER_VIEWER' ? 'bg-primary text-primary-foreground border-primary' : 'bg-card border-border'
                 }`}
               >
-                조회만 가능
+                조회 전용 돌봄 참여
               </button>
             </div>
           </div>

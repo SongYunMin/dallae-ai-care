@@ -3,14 +3,29 @@ import { useApp } from '@/state/app-state';
 import { Edit2, Plus, Save, ShieldCheck, Trash2, X } from 'lucide-react';
 
 export function RulesScreen() {
-  const { parentRules, editableParentRules, addRule, updateRule, deleteRule, toast } = useApp();
+  const {
+    parentRules,
+    editableParentRules,
+    addRule,
+    updateRule,
+    deleteRule,
+    currentUser,
+    isBootstrapping,
+    loadError,
+    demoMode,
+    toast,
+  } = useApp();
   const [text, setText] = useState('');
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editingText, setEditingText] = useState('');
   const [saving, setSaving] = useState(false);
   const defaultRules = parentRules.filter((rule) => !editableParentRules.includes(rule));
+  const canManageRules = currentUser.role === 'PARENT_ADMIN' || currentUser.role === 'PARENT_EDITOR';
+  const showLoading = isBootstrapping && !demoMode;
+  const showLoadError = Boolean(loadError) && !demoMode;
 
   const submit = async () => {
+    if (!canManageRules) return;
     const next = text.trim();
     if (!next || saving) return;
 
@@ -28,11 +43,13 @@ export function RulesScreen() {
   };
 
   const beginEdit = (index: number, rule: string) => {
+    if (!canManageRules) return;
     setEditingIndex(index);
     setEditingText(rule);
   };
 
   const saveEdit = async (index: number) => {
+    if (!canManageRules) return;
     const next = editingText.trim();
     if (!next || saving) return;
 
@@ -50,6 +67,7 @@ export function RulesScreen() {
   };
 
   const remove = async (index: number, rule: string) => {
+    if (!canManageRules) return;
     if (typeof window !== 'undefined' && !window.confirm(`"${rule}" 규칙을 삭제할까요?`)) return;
     try {
       await deleteRule(index);
@@ -64,6 +82,15 @@ export function RulesScreen() {
       <header className="px-4 pt-7 pb-3 flex items-center gap-2 pl-16">
         <h1 className="text-lg font-bold">우리 가족 규칙</h1>
       </header>
+      {showLoading ? (
+        <div className="px-4">
+          <StatusCard title="가족 규칙을 불러오는 중이에요" body="아이온이 서버에 저장된 규칙을 확인하고 있어요." />
+        </div>
+      ) : showLoadError ? (
+        <div className="px-4">
+          <StatusCard title="가족 규칙을 불러오지 못했어요" body={loadError ?? '서버 연결을 확인해 주세요.'} />
+        </div>
+      ) : (
       <div className="px-4 space-y-3">
         <div className="rounded-3xl bg-mint/30 border border-mint/60 p-4">
           <div className="flex items-center gap-2 mb-2">
@@ -110,7 +137,7 @@ export function RulesScreen() {
           <div className="flex items-center gap-2 mb-2">
             <p className="text-sm font-bold">부모가 추가한 규칙</p>
             <span className="ml-auto inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-primary/10 text-primary">
-              수정 가능
+              {canManageRules ? '수정 가능' : '부모 전용'}
             </span>
           </div>
           <ul className="space-y-2 mb-3">
@@ -145,20 +172,24 @@ export function RulesScreen() {
                 ) : (
                   <div className="flex items-start gap-2">
                     <p className="flex-1 text-sm leading-snug">{rule}</p>
-                    <button
-                      onClick={() => beginEdit(index, rule)}
-                      className="h-8 w-8 rounded-lg border border-border flex items-center justify-center shrink-0"
-                      aria-label="규칙 수정"
-                    >
-                      <Edit2 size={13} />
-                    </button>
-                    <button
-                      onClick={() => remove(index, rule)}
-                      className="h-8 w-8 rounded-lg border border-border text-coral-foreground flex items-center justify-center shrink-0"
-                      aria-label="규칙 삭제"
-                    >
-                      <Trash2 size={13} />
-                    </button>
+                    {canManageRules && (
+                      <>
+                        <button
+                          onClick={() => beginEdit(index, rule)}
+                          className="h-8 w-8 rounded-lg border border-border flex items-center justify-center shrink-0"
+                          aria-label="규칙 수정"
+                        >
+                          <Edit2 size={13} />
+                        </button>
+                        <button
+                          onClick={() => remove(index, rule)}
+                          className="h-8 w-8 rounded-lg border border-border text-coral-foreground flex items-center justify-center shrink-0"
+                          aria-label="규칙 삭제"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </>
+                    )}
                   </div>
                 )}
               </li>
@@ -167,23 +198,39 @@ export function RulesScreen() {
               <li className="text-sm text-muted-foreground">아직 부모가 추가한 규칙이 없어요.</li>
             )}
           </ul>
-          <div className="flex gap-2">
-            <input
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              placeholder="예: 낮잠은 2시간 이상 재우지 않기"
-              className="flex-1 h-11 px-3 rounded-xl bg-cream border border-border text-sm"
-            />
-            <button
-              onClick={submit}
-              disabled={saving || !text.trim()}
-              className="h-11 px-3 rounded-xl bg-primary text-primary-foreground font-semibold flex items-center gap-1 disabled:opacity-50"
-            >
-              <Plus size={14} /> {saving ? '저장 중' : '추가'}
-            </button>
-          </div>
+          {canManageRules ? (
+            <div className="flex gap-2">
+              <input
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                placeholder="예: 낮잠은 2시간 이상 재우지 않기"
+                className="flex-1 h-11 px-3 rounded-xl bg-cream border border-border text-sm"
+              />
+              <button
+                onClick={submit}
+                disabled={saving || !text.trim()}
+                className="h-11 px-3 rounded-xl bg-primary text-primary-foreground font-semibold flex items-center gap-1 disabled:opacity-50"
+              >
+                <Plus size={14} /> {saving ? '저장 중' : '추가'}
+              </button>
+            </div>
+          ) : (
+            <div className="rounded-2xl bg-muted/60 border border-border px-4 py-3 text-xs text-muted-foreground">
+              조회 전용 돌봄 참여자는 가족 규칙을 확인만 할 수 있어요.
+            </div>
+          )}
         </div>
       </div>
+      )}
+    </div>
+  );
+}
+
+function StatusCard({ title, body }: { title: string; body: string }) {
+  return (
+    <div className="rounded-3xl bg-card shadow-card p-5">
+      <p className="text-sm font-bold">{title}</p>
+      <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{body}</p>
     </div>
   );
 }

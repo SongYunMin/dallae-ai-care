@@ -5,7 +5,9 @@ import type { CareRecord, CareRecordType } from '@/lib/types';
 import { formatRelative, formatTime } from '@/lib/date';
 import { Baby, Edit2, MessageSquareWarning, Milk, Moon, Pill, Plus, Save, StickyNote, Trash2, X } from 'lucide-react';
 
-const recordMeta: Record<CareRecordType, { label: string; icon: typeof Milk; tone: string }> = {
+type RecordMeta = { label: string; icon: typeof Milk; tone: string };
+
+const recordMeta: Record<CareRecordType, RecordMeta> = {
   FEEDING: { label: '수유', icon: Milk, tone: 'bg-cream text-foreground' },
   SLEEP_START: { label: '낮잠 시작', icon: Moon, tone: 'bg-sky/50 text-sky-foreground' },
   SLEEP_END: { label: '낮잠 종료', icon: Moon, tone: 'bg-sky/30 text-sky-foreground' },
@@ -14,6 +16,20 @@ const recordMeta: Record<CareRecordType, { label: string; icon: typeof Milk; ton
   CRYING: { label: '울음', icon: MessageSquareWarning, tone: 'bg-warning/40 text-warning-foreground' },
   NOTE: { label: '메모', icon: StickyNote, tone: 'bg-muted text-foreground' },
 };
+
+const UNKNOWN_RECORD_META: RecordMeta = {
+  label: '알 수 없는 기록',
+  icon: StickyNote,
+  tone: 'bg-muted text-foreground',
+};
+
+function isCareRecordType(type: string | undefined): type is CareRecordType {
+  return Boolean(type && type in recordMeta);
+}
+
+function getRecordMeta(type: string): RecordMeta {
+  return (recordMeta as Record<string, RecordMeta>)[type] ?? UNKNOWN_RECORD_META;
+}
 
 const quickActions: { type: CareRecordType; label: string }[] = [
   { type: 'FEEDING', label: '수유' },
@@ -32,7 +48,7 @@ type RecordDraft = {
 
 function recordToDraft(record?: CareRecord): RecordDraft {
   return {
-    type: record?.type ?? 'FEEDING',
+    type: isCareRecordType(record?.type) ? record.type : 'FEEDING',
     amount: record?.amountMl ? String(record.amountMl) : '',
     memo: record?.memo ?? '',
   };
@@ -127,14 +143,15 @@ export function RecordsScreen() {
         <div className="px-4 pt-4">
           <div className="grid grid-cols-3 gap-2">
             {quickActions.map((a) => {
-              const Icon = recordMeta[a.type].icon;
+              const meta = getRecordMeta(a.type);
+              const Icon = meta.icon;
               return (
                 <button
                   key={a.type}
                   onClick={() => handleQuick(a.type)}
                   className="rounded-2xl bg-card shadow-card py-3 flex flex-col items-center gap-1 active:scale-95 transition-transform"
                 >
-                  <span className={`rounded-xl p-2 ${recordMeta[a.type].tone}`}>
+                  <span className={`rounded-xl p-2 ${meta.tone}`}>
                     <Icon size={20} />
                   </span>
                   <span className="text-xs font-semibold">{a.label}</span>
@@ -201,7 +218,7 @@ function TimelineItem({
   onSave: () => void;
   onRemove: () => void;
 }) {
-  const m = recordMeta[record.type];
+  const m = getRecordMeta(record.type);
   const Icon = m.icon;
   return (
     <li className="relative pl-12">

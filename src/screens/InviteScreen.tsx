@@ -8,7 +8,7 @@ const roleLabel: Record<UserRole, string> = {
   PARENT_ADMIN: '관리자',
   PARENT_EDITOR: '기록 가능',
   CAREGIVER_EDITOR: '기록 가능',
-  CAREGIVER_VIEWER: '조회만 가능',
+  CAREGIVER_VIEWER: '조회 전용 돌봄 참여',
 };
 
 export function InviteScreen() {
@@ -70,8 +70,8 @@ export function InviteScreen() {
       });
       toast(`${u.name}로 참여했어요. 돌봄 모드를 시작할게요.`);
       navigate('careMode');
-    } catch {
-      toast('초대 링크를 확인하지 못했어요. 최신 링크로 다시 시도해 주세요.');
+    } catch (err) {
+      toast(err instanceof Error ? `돌봄 참여 실패: ${err.message}` : '초대 링크를 확인하지 못했어요. 최신 링크로 다시 시도해 주세요.');
     }
   };
 

@@ -70,6 +70,7 @@ export type Screen =
   | 'checklist';
 
 type Toast = { id: string; text: string };
+export type PendingChatQuestion = { sourceId?: string; question: string };
 
 const DEMO_STORAGE_KEY = 'dallae.demoMode';
 
@@ -194,8 +195,8 @@ type AppState = {
 
   chatMessages: ChatMessage[];
   addChatMessage: (m: ChatMessage) => void;
-  pendingChatQuestion: string | null;
-  setPendingChatQuestion: (q: string | null) => void;
+  pendingChatQuestion: PendingChatQuestion | null;
+  setPendingChatQuestion: (q: PendingChatQuestion | null) => void;
 
   session: CareSession | null;
   startSession: (s: CareSession) => void;
@@ -246,7 +247,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [editableParentRules, setEditableParentRules] = useState<string[]>([]);
   const [notifications, setNotifications] = useState<AgentNotification[]>([]);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
-  const [pendingChatQuestion, setPendingChatQuestion] = useState<string | null>(null);
+  const [pendingChatQuestion, setPendingChatQuestionState] = useState<PendingChatQuestion | null>(null);
+  const sentPendingChatSourceIdsRef = useRef<Set<string>>(new Set());
   const [session, setSession] = useState<CareSession | null>(null);
   const [lastEndedSession, setLastEnded] = useState<CareSession | null>(null);
   const [invite, setInvite] = useState<{ token: string; url: string } | null>(null);
@@ -308,8 +310,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setSession(null);
     setLastEnded(null);
     setInvite(null);
+    sentPendingChatSourceIdsRef.current.clear();
     setChatMessages([]);
-    setPendingChatQuestion(null);
+    setPendingChatQuestionState(null);
     setParentThankYouMessage('');
     setChildMoodState(null);
     setChild(MOCK_CHILD);
@@ -550,7 +553,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setSession(null);
       setLastEnded(null);
       setInvite(null);
-      setPendingChatQuestion(null);
+      sentPendingChatSourceIdsRef.current.clear();
+      setPendingChatQuestionState(null);
       setCurrentUserState(DEFAULT_PARENT);
       setHistory([]);
       setPayload(null);
@@ -600,7 +604,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setParentRules((arr) => (arr.includes(r) ? arr : [...arr, r]));
         return;
       }
-      const rules = await createRule(r, child.id);
+      const rules = await createRule(r, child.id, currentUser.id);
       setParentRules(rules.rules);
       setEditableParentRules(rules.parentRules);
     },
@@ -655,7 +659,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     chatMessages,
     addChatMessage: (m) => setChatMessages((arr) => [...arr, m]),
     pendingChatQuestion,
-    setPendingChatQuestion,
+    setPendingChatQuestion: (question) => {
+      if (question?.sourceId) {
+        if (sentPendingChatSourceIdsRef.current.has(question.sourceId)) return;
+        sentPendingChatSourceIdsRef.current.add(question.sourceId);
+      }
+      setPendingChatQuestionState(question);
+    },
     session,
     startSession: (s) => setSession(s),
     endSession: () => {
@@ -685,7 +695,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       };
       setChecklist((arr) => sortChecklist([...arr, localItem]));
       if (demoMode) return;
-      void createChecklistItemApi(localItem, child.id)
+      void createChecklistItemApi(localItem, child.id, currentUser.id)
         .then((saved) => {
           setChecklist((arr) => arr.map((it) => (it.id === localItem.id ? saved : it)));
         })
@@ -716,7 +726,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         ),
       );
       if (demoMode) return;
-      void updateChecklistItemApi(id, patch)
+      void updateChecklistItemApi(id, patch, currentUser.id)
         .then((saved) => {
           setChecklist((arr) => arr.map((it) => (it.id === id ? saved : it)));
         })
@@ -729,7 +739,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const removed = checklistRef.current.find((it) => it.id === id);
       setChecklist((arr) => arr.filter((it) => it.id !== id));
       if (demoMode) return;
-      void deleteChecklistItemApi(id).catch(() => {
+      void deleteChecklistItemApi(id, currentUser.id).catch(() => {
         if (removed) setChecklist((arr) => sortChecklist([...arr, removed]));
         toast('체크리스트 삭제를 백엔드에 저장하지 못했어요');
       });

@@ -305,12 +305,19 @@ class DallaeStore:
         self._persist()
 
     def create_invite(self, family_id: str, payload: dict, origin: str) -> dict:
+        if family_id not in self.families:
+            raise KeyError("가족을 찾을 수 없습니다.")
+        child = next((item for item in self.children.values() if item.get("familyId") == family_id), None)
+        if not child:
+            raise KeyError("아이를 찾을 수 없습니다.")
+
         token = f"invite_{uuid4().hex[:8]}"
         thank_you_message = (payload.get("memo") or "").strip()
         invite = {
             "token": token,
             "familyId": family_id,
-            "childName": self.children["child_1"]["name"],
+            "childId": child["id"],
+            "childName": child["name"],
             "relationship": payload["relationship"],
             "role": payload["role"],
             "status": "ACTIVE",
@@ -337,7 +344,7 @@ class DallaeStore:
             return {
                 "userId": accepted_user_id,
                 "familyId": member["familyId"],
-                "childId": "child_1",
+                "childId": invite.get("childId") or "child_1",
                 "role": member["role"],
                 "name": member["name"],
                 "relationship": member["relationship"],
@@ -364,7 +371,7 @@ class DallaeStore:
         return {
             "userId": user_id,
             "familyId": invite["familyId"],
-            "childId": "child_1",
+            "childId": invite.get("childId") or "child_1",
             "role": invite["role"],
             "name": payload["name"],
             "relationship": invite["relationship"],
@@ -373,7 +380,7 @@ class DallaeStore:
         }
 
     def child_records(self, child_id: str) -> list[dict]:
-        records = [record for record in self.records.values() if record["childId"] == child_id]
+        records = [record for record in self.records.values() if record.get("childId") == child_id]
         return sorted(records, key=lambda record: record["recordedAt"], reverse=True)
 
     def create_record(self, payload: dict) -> dict:
@@ -417,6 +424,8 @@ class DallaeStore:
 
     def start_session(self, payload: dict) -> dict:
         member = self.members[payload["caregiverId"]]
+        if self.active_session(payload["childId"], payload["caregiverId"]):
+            raise ValueError("이미 진행 중인 돌봄 세션이 있습니다.")
         session_id = f"session_{uuid4().hex[:8]}"
         session = {
             "id": session_id,
@@ -433,6 +442,17 @@ class DallaeStore:
         self.sessions[session_id] = session
         self._persist()
         return session
+
+    def active_session(self, child_id: str, caregiver_id: str) -> dict | None:
+        """같은 돌봄자에게 동시에 열린 ACTIVE 세션이 있는지 찾는다."""
+        for session in self.sessions.values():
+            if (
+                session.get("childId") == child_id
+                and session.get("caregiverId") == caregiver_id
+                and session.get("status") == "ACTIVE"
+            ):
+                return session
+        return None
 
     def get_session(self, session_id: str) -> dict:
         """세션 ID로 돌봄 세션을 조회한다."""

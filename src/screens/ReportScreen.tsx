@@ -134,7 +134,10 @@ export function ReportScreen() {
           </button>
           <button
             onClick={() => {
-              setPendingChatQuestion('오늘 돌봄 중에 더 신경 써야 할 게 있을까?');
+              setPendingChatQuestion({
+                sourceId: `report:${session?.id ?? routeSessionId}:followup`,
+                question: '오늘 돌봄 중에 더 신경 써야 할 게 있을까?',
+              });
               navigate('chat');
             }}
             className="flex-1 h-12 rounded-2xl bg-card border border-border font-semibold text-sm"

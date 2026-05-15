@@ -235,10 +235,14 @@ export async function listRules(childId = DEFAULT_CHILD_ID): Promise<RulesResult
   );
 }
 
-export async function createRule(text: string, childId = DEFAULT_CHILD_ID): Promise<RulesResult> {
+export async function createRule(
+  text: string,
+  childId = DEFAULT_CHILD_ID,
+  actorId = DEFAULT_PARENT_ID,
+): Promise<RulesResult> {
   return requestJson<RulesResult>('/api/rules', {
     method: 'POST',
-    body: JSON.stringify({ childId, text }),
+    body: JSON.stringify({ actorId, childId, text }),
   });
 }
 
@@ -482,10 +486,12 @@ export async function listChecklistItems(childId = DEFAULT_CHILD_ID): Promise<Ch
 export async function createChecklistItem(
   item: ChecklistItem,
   childId = DEFAULT_CHILD_ID,
+  actorId = item.createdBy,
 ): Promise<ChecklistItem> {
   return requestJson<ChecklistItem>('/api/checklists', {
     method: 'POST',
     body: JSON.stringify({
+      actorId,
       id: item.id,
       familyId: item.familyId ?? DEFAULT_FAMILY_ID,
       childId: item.childId ?? childId,
@@ -502,16 +508,17 @@ export async function createChecklistItem(
 export async function updateChecklistItem(
   id: string,
   patch: ChecklistPatch,
+  actorId = DEFAULT_PARENT_ID,
 ): Promise<ChecklistItem> {
   return requestJson<ChecklistItem>(`/api/checklists/${encodeURIComponent(id)}`, {
     method: 'PATCH',
-    body: JSON.stringify(patch),
+    body: JSON.stringify({ actorId, ...patch }),
   });
 }
 
-export async function deleteChecklistItem(id: string): Promise<boolean> {
+export async function deleteChecklistItem(id: string, actorId = DEFAULT_PARENT_ID): Promise<boolean> {
   const res = await requestJson<{ id: string; deleted: boolean }>(
-    `/api/checklists/${encodeURIComponent(id)}`,
+    `/api/checklists/${encodeURIComponent(id)}?actorId=${encodeURIComponent(actorId)}`,
     { method: 'DELETE' },
   );
   return res.deleted;

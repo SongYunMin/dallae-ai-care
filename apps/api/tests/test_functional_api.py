@@ -190,6 +190,27 @@ def test_invite_accept_rejects_unknown_token(monkeypatch, tmp_path):
     assert accepted.json()["detail"] == "초대 링크를 찾을 수 없습니다."
 
 
+def test_unknown_child_status_returns_404(monkeypatch, tmp_path):
+    client = make_client(monkeypatch, tmp_path)
+
+    res = client.get("/api/children/child_missing/status")
+
+    assert res.status_code == 404
+    assert res.json()["detail"] == "아이를 찾을 수 없습니다."
+
+
+def test_invite_creation_rejects_unknown_family(monkeypatch, tmp_path):
+    client = make_client(monkeypatch, tmp_path)
+
+    res = client.post(
+        "/api/families/family_missing/invites",
+        json={"relationship": "이모", "role": "CAREGIVER_EDITOR"},
+    )
+
+    assert res.status_code == 404
+    assert res.json()["detail"] == "가족을 찾을 수 없습니다."
+
+
 def test_multiple_invites_keep_thank_you_mapping_per_caregiver_session(monkeypatch, tmp_path):
     client = make_client(monkeypatch, tmp_path)
 
@@ -219,6 +240,7 @@ def test_multiple_invites_keep_thank_you_mapping_per_caregiver_session(monkeypat
             "caregiverName": first_user["name"],
         },
     )
+    client.post(f"/api/care-sessions/{first_session.json()['careSessionId']}/end", json={"counts": {}})
     second_session = client.post(
         "/api/care-sessions/start",
         json={
@@ -258,6 +280,7 @@ def test_same_invited_caregiver_keeps_mapping_across_repeated_sessions(monkeypat
             "caregiverName": caregiver["name"],
         },
     )
+    client.post(f"/api/care-sessions/{first_session.json()['careSessionId']}/end", json={"counts": {}})
     second_session = client.post(
         "/api/care-sessions/start",
         json={
@@ -275,6 +298,51 @@ def test_same_invited_caregiver_keeps_mapping_across_repeated_sessions(monkeypat
     assert second_session.json()["inviteToken"] == invite["token"]
     assert first_session.json()["thankYouMessage"] == "늘 고마워요."
     assert second_session.json()["thankYouMessage"] == "늘 고마워요."
+
+
+def test_duplicate_active_care_session_is_rejected(monkeypatch, tmp_path):
+    client = make_client(monkeypatch, tmp_path)
+
+    first = client.post(
+        "/api/care-sessions/start",
+        json={
+            "familyId": "family_1",
+            "childId": "child_1",
+            "caregiverId": "user_grandma_1",
+            "caregiverName": "할머니",
+        },
+    )
+    duplicate = client.post(
+        "/api/care-sessions/start",
+        json={
+            "familyId": "family_1",
+            "childId": "child_1",
+            "caregiverId": "user_grandma_1",
+            "caregiverName": "할머니",
+        },
+    )
+
+    assert first.status_code == 200
+    assert duplicate.status_code == 409
+    assert duplicate.json()["detail"] == "이미 진행 중인 돌봄 세션이 있습니다."
+
+
+def test_care_session_start_rejects_family_child_mismatch(monkeypatch, tmp_path):
+    client = make_client(monkeypatch, tmp_path)
+    main.store.families["family_2"] = {"id": "family_2", "name": "다른 가족"}
+
+    res = client.post(
+        "/api/care-sessions/start",
+        json={
+            "familyId": "family_2",
+            "childId": "child_1",
+            "caregiverId": "user_grandma_1",
+            "caregiverName": "할머니",
+        },
+    )
+
+    assert res.status_code == 404
+    assert res.json()["detail"] == "아이를 찾을 수 없습니다."
 
 
 def test_records_are_persisted_listed_and_status_updates(monkeypatch, tmp_path):
@@ -346,6 +414,68 @@ def test_record_write_is_denied_for_viewer(monkeypatch, tmp_path):
 
     assert res.status_code == 403
     assert res.json()["detail"] == "기록 권한이 없습니다."
+
+
+def test_record_api_rejects_invalid_enums_and_wrong_session_scope(monkeypatch, tmp_path):
+    client = make_client(monkeypatch, tmp_path)
+    main.store.families["family_2"] = {"id": "family_2", "name": "다른 가족"}
+    main.store.children["child_2"] = {
+        "id": "child_2",
+        "familyId": "family_2",
+        "name": "서아",
+        "ageInMonths": 2,
+        "birthDate": "2026-03-01",
+        "feedingType": "FORMULA",
+    }
+    main.store.members["caregiver_2"] = {
+        "id": "caregiver_2",
+        "familyId": "family_2",
+        "name": "다른 돌봄자",
+        "relationship": "aunt",
+        "role": "CAREGIVER_EDITOR",
+    }
+    session = client.post(
+        "/api/care-sessions/start",
+        json={"familyId": "family_2", "childId": "child_2", "caregiverId": "caregiver_2"},
+    ).json()
+
+    invalid_type = client.post(
+        "/api/records",
+        json={
+            "familyId": "family_1",
+            "childId": "child_1",
+            "type": "UNKNOWN",
+            "recordedBy": "user_parent_1",
+            "source": "MANUAL",
+        },
+    )
+    invalid_source = client.post(
+        "/api/records",
+        json={
+            "familyId": "family_1",
+            "childId": "child_1",
+            "type": "NOTE",
+            "recordedBy": "user_parent_1",
+            "source": "BOT",
+        },
+    )
+    wrong_session = client.post(
+        "/api/records",
+        json={
+            "familyId": "family_1",
+            "childId": "child_1",
+            "careSessionId": session["careSessionId"],
+            "type": "NOTE",
+            "recordedBy": "user_parent_1",
+            "source": "MANUAL",
+            "memo": "다른 가족 세션에 기록하면 안 됨",
+        },
+    )
+
+    assert invalid_type.status_code == 422
+    assert invalid_source.status_code == 422
+    assert wrong_session.status_code == 400
+    assert wrong_session.json()["detail"] == "돌봄 세션과 기록 대상이 일치하지 않습니다."
 
 
 def test_record_update_delete_refresh_status_and_authorization(monkeypatch, tmp_path):
@@ -438,6 +568,7 @@ def test_care_session_detail_and_latest_can_be_loaded(monkeypatch, tmp_path):
             "caregiverName": "할머니",
         },
     ).json()
+    client.post(f"/api/care-sessions/{first['careSessionId']}/end", json={"counts": {}})
     second = client.post(
         "/api/care-sessions/start",
         json={
@@ -618,6 +749,20 @@ def test_notifications_rules_status_and_suggestions(monkeypatch, tmp_path):
     assert "마지막 수유는 언제였어?" in suggestions.json()["suggestions"]
 
 
+def test_rule_create_rejects_empty_text_and_non_parent_actor(monkeypatch, tmp_path):
+    client = make_client(monkeypatch, tmp_path)
+
+    empty = client.post("/api/rules", json={"childId": "child_1", "text": "   "})
+    caregiver = client.post(
+        "/api/rules",
+        json={"actorId": "user_grandma_1", "childId": "child_1", "text": "낮잠은 2시간을 넘기지 않기"},
+    )
+
+    assert empty.status_code == 422
+    assert caregiver.status_code == 403
+    assert caregiver.json()["detail"] == "관리 권한이 없습니다."
+
+
 def test_parent_rules_can_be_updated_and_deleted_without_touching_defaults(monkeypatch, tmp_path):
     client = make_client(monkeypatch, tmp_path)
 
@@ -637,6 +782,52 @@ def test_parent_rules_can_be_updated_and_deleted_without_touching_defaults(monke
     assert deleted.json()["parentRules"] == ["영상 대신 촉감 놀이 먼저 하기"]
     assert "약은 부모가 등록한 내용이 있을 때만 먹인다." in after.json()["rules"]
     assert after.json()["parentRules"] == ["영상 대신 촉감 놀이 먼저 하기"]
+
+
+def test_checklist_api_rejects_invalid_kind_and_non_parent_mutation(monkeypatch, tmp_path):
+    client = make_client(monkeypatch, tmp_path)
+
+    invalid_kind = client.post(
+        "/api/checklists",
+        json={
+            "familyId": "family_1",
+            "childId": "child_1",
+            "date": "2026-05-14",
+            "time": "09:30",
+            "label": "알 수 없는 항목",
+            "kind": "UNKNOWN",
+            "createdBy": "user_parent_1",
+            "createdByRole": "PARENT_ADMIN",
+        },
+    )
+    caregiver_created = client.post(
+        "/api/checklists",
+        json={
+            "actorId": "user_grandma_1",
+            "familyId": "family_1",
+            "childId": "child_1",
+            "date": "2026-05-14",
+            "time": "09:30",
+            "label": "돌봄자가 만들면 안 됨",
+            "kind": "FEEDING",
+            "createdBy": "user_grandma_1",
+            "createdByRole": "CAREGIVER_EDITOR",
+        },
+    )
+    seed_id = next(iter(main.store.checklists))
+    caregiver_updated = client.patch(
+        f"/api/checklists/{seed_id}",
+        json={"actorId": "user_grandma_1", "completed": True, "completedBy": "할머니"},
+    )
+    caregiver_deleted = client.delete(f"/api/checklists/{seed_id}?actorId=user_grandma_1")
+
+    assert invalid_kind.status_code == 422
+    assert caregiver_created.status_code == 403
+    assert caregiver_created.json()["detail"] == "관리 권한이 없습니다."
+    assert caregiver_updated.status_code == 403
+    assert caregiver_updated.json()["detail"] == "관리 권한이 없습니다."
+    assert caregiver_deleted.status_code == 403
+    assert caregiver_deleted.json()["detail"] == "관리 권한이 없습니다."
 
 
 def test_checklist_api_persists_due_and_followup_notifications(monkeypatch, tmp_path):

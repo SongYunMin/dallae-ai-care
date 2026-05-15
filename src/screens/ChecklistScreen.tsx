@@ -10,9 +10,38 @@ import {
 } from '@/lib/checklist';
 import type { ChecklistItem, ChecklistKind } from '@/lib/types';
 
+type ChecklistKindMeta = (typeof KIND_META)[ChecklistKind];
+
+const UNKNOWN_KIND_META: ChecklistKindMeta = {
+  label: '알 수 없음',
+  emoji: '📝',
+  tone: 'bg-muted text-foreground',
+};
+
+function getKindMeta(kind: string): ChecklistKindMeta {
+  return (KIND_META as Record<string, ChecklistKindMeta>)[kind] ?? UNKNOWN_KIND_META;
+}
+
+function isParentRole(role: string) {
+  return role === 'PARENT_ADMIN' || role === 'PARENT_EDITOR';
+}
+
 export function ChecklistScreen() {
-  const { checklist, addChecklistItem, toggleChecklistItem, removeChecklistItem, toast } = useApp();
+  const {
+    checklist,
+    addChecklistItem,
+    toggleChecklistItem,
+    removeChecklistItem,
+    currentUser,
+    isBootstrapping,
+    loadError,
+    demoMode,
+    toast,
+  } = useApp();
   const [showForm, setShowForm] = useState(false);
+  const canManageChecklist = isParentRole(currentUser.role);
+  const showLoading = isBootstrapping && !demoMode;
+  const showLoadError = Boolean(loadError) && !demoMode;
 
   const grouped = useMemo(() => {
     const by: Record<string, ChecklistItem[]> = {};
@@ -33,14 +62,20 @@ export function ChecklistScreen() {
       </header>
 
       <div className="px-4 space-y-3">
-        <button
-          onClick={() => setShowForm((s) => !s)}
-          className="w-full h-12 rounded-2xl bg-primary text-primary-foreground font-bold text-sm flex items-center justify-center gap-2 shadow-soft active:scale-[0.99] transition-transform"
-        >
-          <Plus size={18} /> {showForm ? '닫기' : '새 체크리스트 추가'}
-        </button>
+        {canManageChecklist ? (
+          <button
+            onClick={() => setShowForm((s) => !s)}
+            className="w-full h-12 rounded-2xl bg-primary text-primary-foreground font-bold text-sm flex items-center justify-center gap-2 shadow-soft active:scale-[0.99] transition-transform"
+          >
+            <Plus size={18} /> {showForm ? '닫기' : '새 체크리스트 추가'}
+          </button>
+        ) : (
+          <div className="rounded-2xl bg-muted/60 border border-border px-4 py-3 text-xs text-muted-foreground">
+            조회 전용 돌봄 참여자는 부모가 만든 체크리스트를 확인만 할 수 있어요.
+          </div>
+        )}
 
-        {showForm && (
+        {showForm && canManageChecklist && (
           <NewItemForm
             onAdd={(payload) => {
               addChecklistItem(payload);
@@ -50,13 +85,16 @@ export function ChecklistScreen() {
           />
         )}
 
-        {grouped.length === 0 && (
-          <div className="rounded-3xl bg-card shadow-card p-8 text-center text-sm text-muted-foreground">
-            아직 등록된 체크리스트가 없어요.
-          </div>
+        {showLoading && <StatusCard title="체크리스트를 불러오는 중이에요" body="서버에 저장된 일정 항목을 확인하고 있어요." />}
+        {showLoadError && !showLoading && (
+          <StatusCard title="체크리스트를 불러오지 못했어요" body={loadError ?? '서버 연결을 확인해 주세요.'} />
         )}
 
-        {grouped.map(([date, items]) => (
+        {!showLoading && !showLoadError && grouped.length === 0 && (
+          <StatusCard title="아직 등록된 체크리스트가 없어요" body="부모가 정한 돌봄 시간표가 여기에 표시돼요." />
+        )}
+
+        {!showLoading && !showLoadError && grouped.map(([date, items]) => (
           <section key={date} className="rounded-3xl bg-card shadow-card p-4 space-y-3">
             <div className="flex items-center gap-2">
               <CalendarDays size={16} className="text-primary" />
@@ -70,6 +108,7 @@ export function ChecklistScreen() {
                 <ChecklistRow
                   key={it.id}
                   item={it}
+                  canManage={canManageChecklist}
                   onToggle={() => toggleChecklistItem(it.id)}
                   onRemove={() => removeChecklistItem(it.id)}
                 />
@@ -88,14 +127,16 @@ export function ChecklistScreen() {
 
 function ChecklistRow({
   item,
+  canManage,
   onToggle,
   onRemove,
 }: {
   item: ChecklistItem;
+  canManage: boolean;
   onToggle: () => void;
   onRemove: () => void;
 }) {
-  const meta = KIND_META[item.kind];
+  const meta = getKindMeta(item.kind);
   const due = itemDateTime(item);
   const now = Date.now();
   const isPast = due.getTime() < now;
@@ -110,8 +151,9 @@ function ChecklistRow({
     >
       <button
         onClick={onToggle}
-        aria-label={item.completed ? '완료 취소' : '완료하기'}
-        className="shrink-0 mt-0.5 active:scale-90 transition-transform"
+        disabled={!canManage}
+        aria-label={item.completed ? `${item.label} 완료 취소` : `${item.label} 완료하기`}
+        className="shrink-0 mt-0.5 active:scale-90 transition-transform disabled:opacity-60"
       >
         {item.completed ? (
           <CheckCircle2 size={26} className="text-mint-foreground" />
@@ -153,14 +195,25 @@ function ChecklistRow({
         )}
       </div>
 
-      <button
-        onClick={onRemove}
-        aria-label="삭제"
-        className="shrink-0 text-muted-foreground/60 hover:text-coral-foreground p-1"
-      >
-        <Trash2 size={16} />
-      </button>
+      {canManage && (
+        <button
+          onClick={onRemove}
+          aria-label={`${item.label} 삭제`}
+          className="shrink-0 text-muted-foreground/60 hover:text-coral-foreground p-1"
+        >
+          <Trash2 size={16} />
+        </button>
+      )}
     </li>
+  );
+}
+
+function StatusCard({ title, body }: { title: string; body: string }) {
+  return (
+    <div className="rounded-3xl bg-card shadow-card p-8 text-center">
+      <p className="text-sm font-bold">{title}</p>
+      <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{body}</p>
+    </div>
   );
 }
 

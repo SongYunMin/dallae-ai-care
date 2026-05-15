@@ -84,19 +84,19 @@ export function DashboardScreen() {
           </div>
 
           <div className="relative flex gap-3 items-start">
-            <div className="relative rounded-2xl bg-card/80 p-1 shrink-0">
-              <IonMascot variant="wink" size={56} />
-              {childMood && (
-                <span
-                  className="absolute -bottom-1 -right-1 h-8 w-8 rounded-full bg-card shadow-card flex items-center justify-center text-base ring-2 ring-mint/60 overflow-hidden"
-                  title={childMood.label}
-                >
-                  {childMood.image ? (
-                    <img src={childMood.image} alt={childMood.label} className="h-full w-full object-cover" />
-                  ) : (
-                    childMood.emoji
-                  )}
-                </span>
+            <div
+              className="relative h-16 w-16 rounded-2xl bg-card/80 p-1 shrink-0 overflow-hidden"
+              title={childMood?.label ?? "아이온 기본 프로필"}
+            >
+              {childMood?.image ? (
+                <img
+                  src={childMood.image}
+                  alt={`${childMood.label} 상태의 아이온`}
+                  className="h-full w-full rounded-xl object-contain"
+                  draggable={false}
+                />
+              ) : (
+                <IonMascot variant="wink" size={64} />
               )}
             </div>
             <div className="flex-1 min-w-0 pt-0.5">

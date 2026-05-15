@@ -21,10 +21,9 @@ const priorityCls = {
 } as const;
 const statusLabel = { UNREAD: '새 알림', ACKED: '확인함', DISMISSED: '숨김' } as const;
 
-const TYPE_META: Record<
-  AgentNotification['type'],
-  { label: string; tone: string; icon: typeof Sparkles; desc: string }
-> = {
+type NotificationMeta = { label: string; tone: string; icon: typeof Sparkles; desc: string };
+
+const TYPE_META: Record<AgentNotification['type'], NotificationMeta> = {
   ROUTINE_SUGGESTION: {
     label: '루틴 변화',
     tone: 'bg-sky/60 text-sky-foreground',
@@ -75,10 +74,41 @@ const TYPE_META: Record<
   },
 };
 
+const UNKNOWN_TYPE_META: NotificationMeta = {
+  label: '알림',
+  tone: 'bg-muted text-foreground/70',
+  icon: Sparkles,
+  desc: '아이온 알림',
+};
+
+function buildNotificationQuestion(n: AgentNotification): string {
+  // 제목만 넘기면 챗봇이 알림의 근거를 잃어버리므로, 사용자에게 보인 맥락을 자연문으로 묶는다.
+  return [
+    '이 아이온 알림을 보고 지금 무엇을 확인하거나 행동하면 좋을지 알려줘.',
+    `제목: ${n.title}`,
+    `내용: ${n.message}`,
+    n.evidence ? `근거: ${n.evidence}` : null,
+    `중요도: ${priorityLabel[n.priority]}`,
+  ]
+    .filter(Boolean)
+    .join('\n');
+}
+
 export function NotificationsScreen() {
-  const { notifications, setNotificationStatus, navigate, setPendingChatQuestion, toast } = useApp();
+  const {
+    notifications,
+    setNotificationStatus,
+    navigate,
+    setPendingChatQuestion,
+    isBootstrapping,
+    loadError,
+    demoMode,
+    toast,
+  } = useApp();
 
   const unreadCount = notifications.filter((n) => n.status === 'UNREAD').length;
+  const showLoading = isBootstrapping && !demoMode;
+  const showLoadError = Boolean(loadError) && !demoMode;
 
   return (
     <div className="flex flex-col">
@@ -114,7 +144,16 @@ export function NotificationsScreen() {
       </header>
 
       <div className="px-4 py-4 space-y-3">
-        {notifications.map((n) => (
+        {showLoading && (
+          <StatusCard title="알림을 불러오는 중이에요" body="아이온이 서버의 알림 데이터를 확인하고 있어요." />
+        )}
+        {showLoadError && !showLoading && (
+          <StatusCard title="알림을 불러오지 못했어요" body={loadError ?? '서버 연결을 확인해 주세요.'} />
+        )}
+        {!showLoading && !showLoadError && notifications.length === 0 && (
+          <StatusCard title="새 알림이 없어요" body="기록이나 체크리스트 변화가 생기면 여기에 표시돼요." />
+        )}
+        {!showLoading && !showLoadError && notifications.map((n) => (
           <NotiCard
             key={n.id}
             n={n}
@@ -127,7 +166,7 @@ export function NotificationsScreen() {
               toast('숨겼어요');
             }}
             onAsk={() => {
-              setPendingChatQuestion(n.title);
+              setPendingChatQuestion({ sourceId: n.id, question: buildNotificationQuestion(n) });
               navigate('chat');
             }}
           />
@@ -149,7 +188,7 @@ function NotiCard({
   onAsk: () => void;
 }) {
   const muted = n.status !== 'UNREAD';
-  const meta = TYPE_META[n.type];
+  const meta = (TYPE_META as Record<string, NotificationMeta>)[n.type] ?? UNKNOWN_TYPE_META;
   const Icon = meta.icon;
   return (
     <div className={`rounded-3xl bg-card shadow-card p-4 space-y-3 ${muted ? 'opacity-70' : ''}`}>
@@ -199,6 +238,15 @@ function NotiCard({
           </button>
         </div>
       )}
+    </div>
+  );
+}
+
+function StatusCard({ title, body }: { title: string; body: string }) {
+  return (
+    <div className="rounded-3xl bg-card shadow-card p-4">
+      <p className="text-sm font-bold">{title}</p>
+      <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{body}</p>
     </div>
   );
 }
