@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 
 import services.context_builder as context_builder
@@ -9,7 +11,7 @@ from services.rules import DEFAULT_CARE_RULES, merge_default_and_parent_rules
 from services.speech_transcriber import _clean_transcript, _transcribe_audio_bytes_sync
 from services.status_service import get_latest_status
 from services.voice_parser import parse_voice_note_to_record
-from store import DallaeStore, now_iso
+from store import DallaeStore, _default_store_path, now_iso
 
 
 def test_default_rules_are_always_first_and_deduped():
@@ -345,6 +347,49 @@ def test_store_persists_records_to_json(tmp_path):
     assert created["recordedAt"].endswith("+09:00")
     assert store_path.exists()
     assert store_path.with_name(f"{store_path.name}.bak").exists()
+
+
+def test_local_store_default_path_is_stable_from_any_process_cwd(monkeypatch, tmp_path):
+    monkeypatch.delenv("DALLAE_STORE_PATH", raising=False)
+    monkeypatch.delenv("VERCEL", raising=False)
+    monkeypatch.chdir(tmp_path)
+
+    assert _default_store_path() == Path(__file__).resolve().parents[1] / "dallae-store.json"
+
+
+def test_store_persists_parent_and_caregiver_records_in_one_json_map(tmp_path):
+    store_path = tmp_path / "shared-records.store.json"
+    store = DallaeStore(store_path)
+    parent_record = store.create_record(
+        {
+            "familyId": "family_1",
+            "childId": "child_1",
+            "type": "FEEDING",
+            "amountMl": 190,
+            "recordedBy": "user_parent_1",
+            "recordedByName": "엄마",
+            "source": "MANUAL",
+            "memo": "부모 기록",
+        }
+    )
+    caregiver_record = store.create_record(
+        {
+            "familyId": "family_1",
+            "childId": "child_1",
+            "type": "DIAPER",
+            "recordedBy": "user_grandma_1",
+            "recordedByName": "할머니",
+            "source": "MANUAL",
+            "memo": "돌보미 기록",
+        }
+    )
+
+    reloaded = DallaeStore(store_path)
+    records = reloaded.child_records("child_1")
+
+    assert {parent_record["id"], caregiver_record["id"]}.issubset({record["id"] for record in records})
+    assert reloaded.records[parent_record["id"]]["recordedBy"] == "user_parent_1"
+    assert reloaded.records[caregiver_record["id"]]["recordedBy"] == "user_grandma_1"
 
 
 def test_store_uses_tmp_path_on_vercel(monkeypatch, tmp_path):

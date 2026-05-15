@@ -49,14 +49,14 @@ export function ParentLoginScreen() {
                 시연용 보호자 입장
               </p>
               <h2 className="mt-3 text-[28px] font-bold leading-[1.15] text-foreground">
-                부모 화면으로
+                아이 설정으로
                 <br />
                 이어서 볼게요
               </h2>
               <p className="mt-2 text-sm leading-relaxed text-foreground/70">
-                기존 아이 기록과 가족 규칙을
+                로그인 후 아이 정보와 가족 규칙을
                 <br />
-                그대로 불러와요.
+                다시 확인해요.
               </p>
             </div>
             <div className="shrink-0 rounded-[1.6rem] bg-card/75 p-2 shadow-card">

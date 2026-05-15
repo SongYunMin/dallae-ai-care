@@ -52,7 +52,12 @@ import {
   type ParentOnboardingResult,
 } from '@/lib/api';
 import { nowKstIso } from '@/lib/kst';
-import { isValidParentDemoLogin } from '@/lib/parent-demo-auth';
+import {
+  isValidParentDemoLogin,
+  nextParentDemoLoginScreen,
+  parentDemoLoginSessionKeysToClear,
+} from '@/lib/parent-demo-auth';
+import { shouldRefreshSharedRecords } from '@/lib/shared-record-sync';
 import {
   isCaregiverRole,
   mergeBootstrappedFamilyMembers,
@@ -80,7 +85,6 @@ type Toast = { id: string; text: string };
 export type PendingChatQuestion = { sourceId?: string; question: string };
 
 const DEMO_STORAGE_KEY = 'dallae.demoMode';
-const PARENT_LOGIN_STORAGE_KEY = 'dallae.parentDemoLogin';
 
 const EMPTY_CHILD: Child = {
   id: DEFAULT_CHILD_ID,
@@ -262,9 +266,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [demoMode, setDemoMode] = useState(() =>
     typeof window !== 'undefined' ? window.sessionStorage.getItem(DEMO_STORAGE_KEY) === '1' : false,
   );
-  const [isParentLoggedIn, setParentLoggedIn] = useState(() =>
-    typeof window !== 'undefined' ? window.sessionStorage.getItem(PARENT_LOGIN_STORAGE_KEY) === '1' : false,
-  );
+  const [isParentLoggedIn, setParentLoggedIn] = useState(false);
   const [isBootstrapping, setIsBootstrapping] = useState(() =>
     typeof window !== 'undefined' ? window.sessionStorage.getItem(DEMO_STORAGE_KEY) !== '1' : true,
   );
@@ -430,6 +432,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!isBootstrapping) refreshAgentNotifications();
   }, [isBootstrapping, refreshAgentNotifications]);
 
+  useEffect(() => {
+    if (demoMode || loadError || isBootstrapping || !shouldRefreshSharedRecords(screen)) return;
+
+    let active = true;
+    // 부모/돌보미가 서로 다른 화면 또는 기기에서 남긴 기록을 JSON 저장소 기준으로 다시 맞춘다.
+    void listCareRecords(child.id)
+      .then((loadedRecords) => {
+        if (active) setRecords(sortRecords(loadedRecords));
+      })
+      .catch(() => {
+        toast('공유 돌봄 기록을 새로 불러오지 못했어요');
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [child.id, demoMode, isBootstrapping, loadError, screen, toast]);
+
   const toastRef = useRef(toast);
   toastRef.current = toast;
   const checklistRef = useRef(checklist);
@@ -498,7 +518,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const enterDemoMode = useCallback(() => {
     if (typeof window !== 'undefined') window.sessionStorage.setItem(DEMO_STORAGE_KEY, '1');
-    if (typeof window !== 'undefined') window.sessionStorage.removeItem(PARENT_LOGIN_STORAGE_KEY);
     setDemoMode(true);
     setParentLoggedIn(false);
     applyDemoState();
@@ -509,15 +528,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     // 백엔드 인증이 아니라 시연용 프론트 게이트만 여는 흐름이다.
     if (typeof window !== 'undefined') {
-      window.sessionStorage.removeItem(DEMO_STORAGE_KEY);
-      window.sessionStorage.setItem(PARENT_LOGIN_STORAGE_KEY, '1');
+      parentDemoLoginSessionKeysToClear().forEach((key) => window.sessionStorage.removeItem(key));
     }
     setDemoMode(false);
     setParentLoggedIn(true);
     setCurrentUserState(DEFAULT_PARENT);
     setHistory([]);
     setPayload(null);
-    routeNavigate({ to: pathForScreen('dashboard') });
+    routeNavigate({ to: pathForScreen(nextParentDemoLoginScreen()) });
     if (typeof window !== 'undefined') window.scrollTo(0, 0);
     return true;
   }, [routeNavigate]);
@@ -608,11 +626,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setFamilyMembers((arr) => [result.member, ...arr.filter((member) => member.id !== result.member.id)]);
       setParentRules(result.activeRules);
       setEditableParentRules(result.child.careNotes ? [result.child.careNotes] : []);
+      setParentLoggedIn(true);
       setLoadError(null);
     },
     logout: () => {
       exitDemoMode();
-      if (typeof window !== 'undefined') window.sessionStorage.removeItem(PARENT_LOGIN_STORAGE_KEY);
       setParentLoggedIn(false);
       setSession(null);
       setLastEnded(null);

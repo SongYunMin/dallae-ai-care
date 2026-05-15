@@ -21,7 +21,8 @@ def _default_store_path() -> Path:
     """Vercel 서버리스에서는 쓰기 가능한 /tmp를 기본 JSON 저장소로 사용한다."""
     if os.getenv("VERCEL"):
         return Path(os.getenv("TMPDIR") or tempfile.gettempdir()) / "dallae-store.json"
-    return Path("./dallae-store.json")
+    # 로컬 실행 위치가 달라도 부모/돌보미가 같은 JSON 파일을 보도록 API 디렉터리에 고정한다.
+    return Path(__file__).resolve().parent / "dallae-store.json"
 
 
 def _format_item_time(time: str) -> str:
