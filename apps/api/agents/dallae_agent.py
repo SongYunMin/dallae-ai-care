@@ -31,6 +31,30 @@ DALLAE_CUTE_TONE_POLICY = """
 - 약물, 의료, 위험 신호, 보호자 확인 안내는 귀여운 표현보다 명확성과 단호함을 우선한다.
 """
 
+DAILY_CHILDCARE_DETAIL_POLICY = """
+[일상 육아 상세 답변 정책]
+
+목표
+- 사용자가 기저귀 갈기, 이유식 만들기, 분유 타기/수유량, 변 색깔처럼 실제 양육 행동을 물으면 일반 잡담처럼 짧게 넘기지 말고 구체적인 순서와 확인 포인트를 답한다.
+- 컨텍스트에 아이 월령, 수유 방식, 알레르기, 최근 기록, 가족 규칙이 있으면 먼저 반영하고, 없으면 안전한 일반 원칙을 알려준 뒤 보호자 확인이 필요한 지점을 짚는다.
+
+답변 방식
+- 필요한 경우 answer는 2~5문장까지 허용하고, 순서가 중요한 질문은 "1) 준비 2) 실행 3) 확인/기록"처럼 단계별로 쓴다.
+- nextActions에는 지금 바로 할 행동을 넣고, recordSuggestions에는 다음 돌봄자가 이어받을 수 있는 기록 항목을 넣는다.
+- 정확한 월령, 체중, 제품, 알레르기, 의사 지시가 필요한 내용은 임의로 단정하지 말고 제품 라벨, 보호자 규칙, 소아청소년과 안내를 확인하도록 말한다.
+
+주제별 기준
+- 기저귀 갈기: 손 씻기, 준비물, 앞에서 뒤로 닦기, 피부를 말린 뒤 발진/상처 확인, 새 기저귀 고정, 시간/소변/대변/피부 상태 기록까지 안내한다.
+- 이유식: 월령과 준비 신호를 확인하고, 익혀서 부드럽게 으깨거나 갈기, 한 번에 한 가지 새 재료, 알레르기 반응 관찰, 질식 위험이 있는 크기/질감 피하기를 포함한다.
+- 분유: 분유량은 아이 상태와 제품마다 달라 임의로 ml를 정하지 않는다. 제품 라벨의 물:분말 비율을 정확히 따르고, 물 먼저 계량한 뒤 동봉 스푼으로 분말을 넣으며, 너무 묽거나 진하게 타지 않도록 경고한다.
+- 변 색깔: 노랑/갈색/초록 계열은 흔히 정상 범위일 수 있지만, 빨강, 검정, 흰색/회색/창백한 변 또는 열, 처짐, 탈수, 반복 설사가 있으면 보호자와 의료진 확인을 안내한다.
+
+안전 경계
+- 약물, 진단, 처방, 응급 판단은 하지 않는다.
+- 분유를 전자레인지로 데우라고 안내하지 않는다.
+- 위험 신호가 명확하면 귀여운 말투보다 보호자/의료진 확인을 우선한다.
+"""
+
 DAEKYO_KIDS_PROGRAM_POLICY = """
 [대교 영유아 프로그램 추천 가이드]
 
@@ -144,8 +168,9 @@ class CareChatAgent(BaseDallaeAgent):
 너는 '달래'의 영유아 돌봄 Q&A 에이전트다.
 {COMMON_SAFETY_POLICY}
 {DALLAE_CUTE_TONE_POLICY}
+{DAILY_CHILDCARE_DETAIL_POLICY}
 {DAEKYO_KIDS_PROGRAM_POLICY}
-최근 기록, 세션 기록, 가족 규칙을 근거로 1~3문장으로 답한다.
+최근 기록, 세션 기록, 가족 규칙을 근거로 답한다. 일반 질문은 1~3문장으로 답하고, 일상 육아 방법 질문은 필요한 만큼 단계별로 상세히 답한다.
 """
 
     async def ask(self, user_message: str, context: dict) -> dict:
@@ -182,10 +207,13 @@ class CareChatAgent(BaseDallaeAgent):
                 "[대교 프로그램 추천 정책]",
                 DAEKYO_KIDS_PROGRAM_POLICY.strip(),
                 "",
+                "[일상 육아 상세 답변 정책]",
+                DAILY_CHILDCARE_DETAIL_POLICY.strip(),
+                "",
                 "[반환 형식]",
                 json.dumps(
                     {
-                        "answer": "1~3문장 한국어 답변. 일반 상황은 귀엽고 다정하게, 위험 상황은 명확하고 단호하게 작성",
+                        "answer": "한국어 답변. 일반 상황은 귀엽고 다정하게, 위험 상황은 명확하고 단호하게 작성. 일상 육아 방법 질문은 필요한 경우 2~5문장 또는 짧은 단계형 안내로 상세히 작성",
                         "nextActions": ["바로 할 일"],
                         "ruleReminders": ["적용되는 가족 규칙"],
                         "recordSuggestions": ["기록하면 좋은 내용"],
@@ -227,6 +255,8 @@ class CareChatAgent(BaseDallaeAgent):
     def _apply_safety_guard(self, response: dict, message: str) -> dict:
         medical_keywords = ["고열", "39도", "호흡", "청색증", "의식", "경련", "발작", "알레르기", "응급"]
         developmental_keywords = ["발달지연", "발달 지연", "언어치료", "놀이치료", "재활", "자폐", "장애"]
+        compact_message = message.replace(" ", "")
+        stool_red_flag_keywords = ["혈변", "피가", "피섞", "빨간변", "빨강변", "검은변", "흑변", "하얀변", "흰변", "흰색변", "회색변", "창백한변"]
         # 약물/민감 돌봄 판단은 모델 응답과 무관하게 보호자 확인으로 올린다.
         parent_keywords = ["약", "해열제", "진통제", "투약", "복용", "영상", "유튜브", "외출", "심하게", "계속", "오래"]
         if any(keyword in message for keyword in medical_keywords):
@@ -234,6 +264,11 @@ class CareChatAgent(BaseDallaeAgent):
             response["answer"] = "위험 신호일 수 있어요. 보호자에게 즉시 연락하고, 상태가 심하면 의료진 확인을 받아주세요."
             response["nextActions"] = ["보호자에게 바로 연락하세요.", "호흡, 체온, 의식 상태를 확인하세요."]
             response["followUpQuestions"] = ["보호자에게 뭐라고 연락하면 돼?", "현재 상태는 어떻게 기록하면 돼?"]
+        elif any(keyword in compact_message for keyword in stool_red_flag_keywords):
+            response["escalation"] = "MEDICAL_CHECK"
+            response["answer"] = "변 색깔이 빨강, 검정, 흰색/회색처럼 보이면 단순 기저귀 안내로 넘기면 안 돼요. 기저귀 사진과 시간, 열이나 처짐 같은 동반 증상을 기록하고 보호자와 소아청소년과에 바로 확인해 주세요."
+            response["nextActions"] = ["기저귀 사진과 시간을 남겨주세요.", "열, 처짐, 탈수, 반복 설사가 있는지 확인하세요.", "보호자에게 바로 공유하고 진료 필요성을 확인하세요."]
+            response["followUpQuestions"] = ["보호자에게 뭐라고 전달하면 돼?", "기저귀 기록에는 뭘 남기면 돼?"]
         elif any(keyword in message for keyword in developmental_keywords):
             response["escalation"] = "ASK_PARENT"
             response["answer"] = "발달이나 치료가 걱정되는 상황이라면 프로그램 추천보다 보호자와 전문가 확인이 먼저예요. 확인이 끝난 뒤에는 아이가 편안해하는 범위에서 트니트니, 키즈잼, 키즈스콜레 활동을 살짝 곁들여볼 수 있어요."
@@ -315,6 +350,139 @@ class CareChatAgent(BaseDallaeAgent):
             "escalation": "NONE",
         }
 
+    def _is_stool_color_question(self, user_message: str) -> bool:
+        """변 색깔 질문은 기저귀 일반 안내보다 먼저 분기해 위험 색을 놓치지 않는다."""
+        message = user_message.replace(" ", "")
+        keywords = ["변색", "변색깔", "변색상", "똥색", "응가색", "대변색", "초록변", "녹변", "혈변", "흑변", "흰변", "하얀변", "회색변"]
+        return any(keyword in message for keyword in keywords)
+
+    def _is_formula_preparation_question(self, user_message: str) -> bool:
+        """마지막 수유 조회와 분유 제조/용량 질문을 구분한다."""
+        message = user_message.replace(" ", "")
+        lookup_keywords = ["마지막", "언제", "먹었", "먹였", "기록"]
+        if any(keyword in message for keyword in lookup_keywords):
+            return False
+        formula_keywords = ["분유", "수유량"]
+        preparation_keywords = ["타", "섞", "만들", "얼마", "몇", "스푼", "물", "온도", "보관", "농도", "양"]
+        return any(keyword in message for keyword in formula_keywords) and any(keyword in message for keyword in preparation_keywords)
+
+    def _is_solid_food_question(self, user_message: str) -> bool:
+        """이유식 제조/시작 질문을 감지해 월령과 질식 위험 기준을 함께 안내한다."""
+        message = user_message.replace(" ", "")
+        keywords = ["이유식", "퓨레", "고형식", "첫음식", "초기식", "중기식", "후기식"]
+        return any(keyword in message for keyword in keywords)
+
+    def _is_diaper_change_question(self, user_message: str) -> bool:
+        """기저귀 상태 조회가 아니라 갈기 방법을 묻는 질문에 상세 절차를 제공한다."""
+        message = user_message.replace(" ", "")
+        method_keywords = ["갈", "교체", "바꾸", "방법", "어떻게", "발진", "닦"]
+        return "기저귀" in message and any(keyword in message for keyword in method_keywords)
+
+    def _stool_color_response(self) -> dict:
+        """ADK가 꺼진 환경에서도 변 색깔 질문은 정상 범위와 위험 색을 함께 안내한다."""
+        return {
+            "answer": (
+                "노랑, 갈색, 초록 계열 변은 먹은 것과 장 움직임에 따라 흔히 보일 수 있어요. "
+                "다만 빨강, 검정, 흰색/회색처럼 보이거나 열, 처짐, 탈수, 반복 설사가 같이 있으면 보호자와 소아청소년과에 확인해야 해요. "
+                "지금은 밝은 곳에서 색을 다시 보고, 기저귀 사진과 시간, 횟수, 아이 컨디션을 같이 기록해두면 좋아요."
+            ),
+            "nextActions": [
+                "밝은 곳에서 변 색이 초록인지 검정에 가까운지 다시 확인해 주세요.",
+                "열, 처짐, 탈수, 반복 설사가 있는지 살펴봐 주세요.",
+                "빨강, 검정, 흰색/회색이면 보호자에게 바로 공유해 주세요.",
+            ],
+            "ruleReminders": [],
+            "recordSuggestions": ["기저귀 사진, 변 색깔, 묽기, 시간, 아이 컨디션을 함께 기록해 주세요."],
+            "proactiveNotifications": [],
+            "followUpQuestions": [
+                "변 색깔별로 언제 병원에 물어봐야 해?",
+                "기저귀 기록에는 뭘 남기면 돼?",
+                "설사일 때는 뭐부터 확인해?",
+            ],
+            "escalation": "NONE",
+        }
+
+    def _formula_preparation_response(self, context: dict) -> dict:
+        """분유 질문은 정확한 비율과 보호자 규칙 확인을 우선해 과농축/희석 위험을 낮춘다."""
+        latest_feeding = context.get("latestStatus", {}).get("feeding")
+        recent_phrase = ""
+        if latest_feeding:
+            amount = f"{latest_feeding.get('amountMl')}ml" if latest_feeding.get("amountMl") else latest_feeding.get("memo")
+            author = latest_feeding.get("recordedByName")
+            if amount:
+                recent_phrase = f" 최근 기록에는 {author + '가 남긴 ' if author else ''}{amount} 수유가 있어요."
+        return {
+            "answer": (
+                "분유량은 아이 월령, 체중, 컨디션, 제품 농도에 따라 달라서 제가 임의로 몇 ml라고 정하면 위험해요. "
+                "제품 라벨의 물:분말 비율을 그대로 따르고, 물 먼저 계량한 뒤 동봉 스푼으로 분말을 넣어 너무 묽거나 진하지 않게 타 주세요. "
+                f"데울 때는 전자레인지 대신 따뜻한 물에 병을 세워 미지근하게 만들고 손목에 떨어뜨려 확인해 주세요.{recent_phrase}"
+            ),
+            "nextActions": [
+                "제품 라벨에서 1스푼당 물 양을 먼저 확인해 주세요.",
+                "물 먼저 계량하고 동봉 스푼으로 분말을 평평하게 떠 넣어 주세요.",
+                "먹기 시작한 시간과 실제 먹은 양을 기록해 주세요.",
+            ],
+            "ruleReminders": [],
+            "recordSuggestions": ["분유 제조 시간, 탄 양, 실제 먹은 양, 남긴 양을 기록해 주세요."],
+            "proactiveNotifications": [],
+            "followUpQuestions": [
+                "분유 보관은 어떻게 하면 돼?",
+                "최근 수유 기록 기준으로 다음 수유는 언제 보면 돼?",
+                "분유를 남기면 어떻게 처리해?",
+            ],
+            "escalation": "NONE",
+        }
+
+    def _solid_food_response(self, context: dict) -> dict:
+        """이유식 질문은 월령/알레르기/질감 확인을 묶어 실무적으로 답한다."""
+        age = self._context_age_in_months(context)
+        age_phrase = f"{age}개월이라면 " if age else ""
+        return {
+            "answer": (
+                f"{age_phrase}이유식은 아이가 앉아 있을 수 있고 고개를 가누며 음식을 삼킬 준비가 되었는지 먼저 봐야 해요. "
+                "재료는 익혀서 아주 부드럽게 으깨거나 갈고, 처음에는 한 가지 재료를 소량으로 시작해 3~5일 정도 알레르기 반응을 살펴보세요. "
+                "덩어리, 둥근 조각, 딱딱한 껍질처럼 질식 위험이 있는 형태는 피하고, 먹은 재료와 반응을 기록해두면 좋아요."
+            ),
+            "nextActions": [
+                "보호자가 허용한 재료와 알레르기 메모를 먼저 확인해 주세요.",
+                "재료를 충분히 익힌 뒤 부드럽게 으깨거나 갈아 주세요.",
+                "처음 먹는 재료는 소량만 주고 피부, 구토, 설사 반응을 관찰해 주세요.",
+            ],
+            "ruleReminders": [],
+            "recordSuggestions": ["먹은 재료, 양, 질감, 거부 여부, 알레르기 의심 반응을 기록해 주세요."],
+            "proactiveNotifications": [],
+            "followUpQuestions": [
+                "초기 이유식 재료는 뭐부터 확인하면 돼?",
+                "알레르기 반응은 어떻게 봐?",
+                "질식 위험 있는 음식은 뭐가 있어?",
+            ],
+            "escalation": "NONE",
+        }
+
+    def _diaper_change_response(self) -> dict:
+        """기저귀 갈기 질문은 위생, 피부 확인, 기록 순서로 바로 따라 할 수 있게 답한다."""
+        return {
+            "answer": (
+                "기저귀는 1) 손을 씻고 새 기저귀, 물티슈, 크림을 준비한 뒤 2) 더러운 기저귀를 열어 앞에서 뒤로 닦고 3) 피부를 말린 다음 발진이나 상처를 확인해 갈아주세요. "
+                "새 기저귀는 허리와 허벅지가 너무 조이지 않게 손가락 한두 개 정도 여유를 두고 고정하면 좋아요. "
+                "대변 색, 묽기, 발진 여부, 갈아준 시간을 기록하면 다음 돌봄자가 이어받기 쉬워요."
+            ),
+            "nextActions": [
+                "손을 씻고 필요한 물품을 손 닿는 곳에 준비해 주세요.",
+                "앞에서 뒤로 닦고 피부가 젖어 있으면 잠깐 말려 주세요.",
+                "발진, 상처, 피가 보이면 보호자에게 공유해 주세요.",
+            ],
+            "ruleReminders": [],
+            "recordSuggestions": ["기저귀 교체 시간, 소변/대변 여부, 변 색깔, 피부 상태를 기록해 주세요."],
+            "proactiveNotifications": [],
+            "followUpQuestions": [
+                "기저귀 발진이면 뭐부터 해야 해?",
+                "변 색깔은 어떻게 기록하면 돼?",
+                "기저귀가 자꾸 새면 어떻게 맞춰?",
+            ],
+            "escalation": "NONE",
+        }
+
     def mock_response(self, user_message: str, context: dict) -> dict:
         rules = context.get("activeRules", [])
         latest = context.get("latestStatus", {})
@@ -340,6 +508,14 @@ class CareChatAgent(BaseDallaeAgent):
             }
         if self._is_daekyo_program_question(user_message):
             return self._daekyo_program_response(context)
+        if self._is_stool_color_question(user_message):
+            return self._stool_color_response()
+        if self._is_formula_preparation_question(user_message):
+            return self._formula_preparation_response(context)
+        if self._is_solid_food_question(user_message):
+            return self._solid_food_response(context)
+        if self._is_diaper_change_question(user_message):
+            return self._diaper_change_response()
         if "수유" in user_message or "분유" in user_message or "먹" in user_message:
             feeding = latest.get("feeding")
             answer = "최근 수유 기록이 아직 없어요. 보호자에게 마지막 수유 시간을 차근차근 확인해 주세요."

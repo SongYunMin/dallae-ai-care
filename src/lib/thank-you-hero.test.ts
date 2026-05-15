@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { pickThankYouHero } from './thank-you-hero';
+import { pickThankYouHero } from './thank-you-hero.ts';
 
 const heroes = ['hero-1', 'hero-2', 'hero-3'] as const;
 

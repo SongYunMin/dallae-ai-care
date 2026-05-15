@@ -12,9 +12,11 @@ import {
 } from "@/lib/api";
 import { formatDuration, formatTime } from "@/lib/date";
 import { itemDateTime, todayKey, formatItemTime } from "@/lib/checklist";
+import { careLogoutButtonState } from "@/lib/care-mode-menu";
+import { saveFinalThankYouReport } from "@/lib/thank-you-report";
 import type { CareRecord, CareRecordType, CareSession, ChecklistItem } from "@/lib/types";
 import { nowKstIso } from "@/lib/kst";
-import { Mic, Send, X } from "lucide-react";
+import { LogOut, Mic, Send, X } from "lucide-react";
 import moodAngry from "@/assets/moods/ion-angry.png";
 import moodCurious from "@/assets/moods/ion-curious.png";
 import moodHappy from "@/assets/moods/ion-happy.png";
@@ -191,6 +193,7 @@ export function CareModeScreen() {
     currentUser,
     toast,
     navigate,
+    logout,
     records,
     checklist,
     setChildMood,
@@ -202,15 +205,22 @@ export function CareModeScreen() {
   const [savingQuickType, setSavingQuickType] = useState<CareRecordType | null>(null);
   const [clientReady, setClientReady] = useState(false);
   const [transcribingVoice, setTranscribingVoice] = useState(false);
+  const [endingCare, setEndingCare] = useState(false);
   const isParent = currentUser.role === "PARENT_ADMIN" || currentUser.role === "PARENT_EDITOR";
   const canWriteRecords = currentUser.role !== "CAREGIVER_VIEWER";
   const recordsRef = useRef(records);
+  const endingCareRef = useRef(false);
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const liveSpeechTextRef = useRef("");
   const finalSpeechTextRef = useRef("");
+  const logoutState = careLogoutButtonState({ endingCare, hasActiveSession: Boolean(session) });
+  const onLogoutToHome = () => {
+    if (typeof window !== "undefined" && !window.confirm(logoutState.confirmMessage)) return;
+    logout();
+  };
 
   useEffect(() => {
     recordsRef.current = records;
@@ -243,9 +253,19 @@ export function CareModeScreen() {
     const viewerCopy = currentUser.role === "CAREGIVER_VIEWER" ? "조회 전용 돌봄 참여로 아이 상태를 확인할 수 있어요" : "지금 아이를 돌보는 분이 사용해요";
     return (
       <div className="px-5 pt-8 pb-6 space-y-4">
-        <header>
-          <h1 className="text-2xl font-bold">돌봄 모드</h1>
-          <p className="text-xs text-muted-foreground mt-1">{viewerCopy}</p>
+        <header className="flex items-start justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold">돌봄 모드</h1>
+            <p className="text-xs text-muted-foreground mt-1">{viewerCopy}</p>
+          </div>
+          <button
+            onClick={onLogoutToHome}
+            disabled={logoutState.disabled}
+            aria-label={logoutState.ariaLabel}
+            className="h-9 px-3 rounded-full bg-card border border-border text-xs font-semibold flex items-center gap-1.5 shrink-0 disabled:opacity-60"
+          >
+            <LogOut size={14} /> {logoutState.label}
+          </button>
         </header>
 
         <div className="rounded-3xl gradient-hero p-5 flex flex-col items-center text-center gap-3 shadow-card">
@@ -529,7 +549,17 @@ export function CareModeScreen() {
             <h1 className="text-xl font-bold mt-0.5">{title}</h1>
             <p className="text-xs text-muted-foreground mt-1">{subtitle}</p>
           </div>
-          <IonMascot variant="wink" size={64} />
+          <div className="flex flex-col items-end gap-2">
+            <button
+              onClick={onLogoutToHome}
+              disabled={logoutState.disabled}
+              aria-label={logoutState.ariaLabel}
+              className="h-9 px-3 rounded-full bg-card/80 border border-border text-xs font-semibold flex items-center gap-1.5 shadow-card disabled:opacity-60"
+            >
+              <LogOut size={14} /> {logoutState.label}
+            </button>
+            <IonMascot variant="wink" size={64} />
+          </div>
         </div>
       </header>
 
@@ -695,6 +725,7 @@ export function CareModeScreen() {
           session.caregiverId === currentUser.id ? (
           <button
             onClick={async () => {
+              if (endingCareRef.current) return;
               if (
                 typeof window !== "undefined" &&
                 !window.confirm("돌봄을 종료할까요? 부모님께 감사 메시지가 전달돼요.")
@@ -702,6 +733,9 @@ export function CareModeScreen() {
                 return;
               const activeSession = session;
               if (!activeSession) return;
+              endingCareRef.current = true;
+              setEndingCare(true);
+              let completed = false;
               const localEnded: CareSession = { ...activeSession, status: "ENDED", endedAt: nowKstIso() };
               const sessionRecords = recordsRef.current.filter((r) => {
                 if (r.careSessionId) return r.careSessionId === localEnded.id;
@@ -720,69 +754,37 @@ export function CareModeScreen() {
               };
               try {
                 await endCareSession(localEnded.id, counts);
-              } catch (err) {
-                toast(err instanceof Error ? `돌봄 종료 실패: ${err.message}` : "돌봄 종료 상태를 백엔드에 저장하지 못했어요");
-                return;
-              }
-
-              const ended = endSession() ?? localEnded;
-              const durationLabel = formatDuration(ended.startedAt, ended.endedAt);
-              const preset = (ended.thankYouMessage || parentThankYouMessage).trim();
-              const baseReport = {
-                id: `thx_${ended.id}`,
-                sessionId: ended.id,
-                fromUserId: "user_parent_1",
-                fromUserName: preset ? "부모님" : "부모님 (AI 작성)",
-                toCaregiverName: ended.caregiverName,
-                message:
-                  preset ||
-                  `${ended.caregiverName}님, 오늘 ${child.name} 돌봐주셔서 정말 감사해요. 덕분에 안심하고 하루를 보냈어요.`,
-                durationLabel,
-                counts: {
-                  feeding: counts.feeding,
-                  diaper: counts.diaper,
-                  sleep: counts.sleep,
-                  medicine: counts.medicine,
-                },
-                sentAt: nowKstIso(),
-              };
-
-              const savedBaseReport = await addThankYouReport(baseReport);
-              if (!savedBaseReport) return;
-              navigate("thankYouReport", { careSessionId: ended.id });
-
-              if (!preset) {
-                void createThankYouMessage({
-                  familyId: ended.familyId,
-                  childId: ended.childId,
-                  caregiverId: ended.caregiverId,
-                  careSessionId: ended.id,
-                  caregiverName: ended.caregiverName,
+                const durationLabel = formatDuration(localEnded.startedAt, localEnded.endedAt);
+                const { savedReport, usedFallbackMessage } = await saveFinalThankYouReport({
+                  ended: localEnded,
                   childName: child.name,
                   durationLabel,
-                  counts: {
-                    feeding: counts.feeding,
-                    diaper: counts.diaper,
-                    sleep: counts.sleep,
-                    medicine: counts.medicine,
-                  },
-                }).then((res) => {
-                  if (!res?.message) return;
-                  const fromUserName = res.fallbackUsed ? "부모님 (AI 기본 응답)" : "부모님 (AI 작성)";
-                  addThankYouReport({
-                    ...baseReport,
-                    fromUserName,
-                    message: res.message,
-                    sentAt: nowKstIso(),
-                  });
-                }).catch(() => {
-                  toast("AI 감사 메시지를 생성하지 못해 기본 메시지를 유지했어요.");
+                  parentThankYouMessage,
+                  counts,
+                  composeMessage: createThankYouMessage,
+                  saveReport: addThankYouReport,
+                  nowIso: nowKstIso,
                 });
+                if (!savedReport) return;
+                endSession();
+                if (usedFallbackMessage && !localEnded.thankYouMessage && !parentThankYouMessage.trim()) {
+                  toast("AI 감사 메시지를 생성하지 못해 기본 메시지를 저장했어요.");
+                }
+                completed = true;
+                navigate("thankYouReport", { careSessionId: localEnded.id });
+              } catch (err) {
+                toast(err instanceof Error ? `돌봄 종료 실패: ${err.message}` : "돌봄 종료 상태를 저장하지 못했어요");
+              } finally {
+                if (!completed) {
+                  endingCareRef.current = false;
+                  setEndingCare(false);
+                }
               }
             }}
-            className="w-full h-14 rounded-2xl bg-coral text-coral-foreground font-semibold shadow-soft"
+            disabled={endingCare}
+            className="w-full h-14 rounded-2xl bg-coral text-coral-foreground font-semibold shadow-soft disabled:opacity-70"
           >
-            돌봄 종료하기
+            {endingCare ? "수고 리포트 만드는 중..." : "돌봄 종료하기"}
           </button>
           ) : (
           <div className="w-full rounded-2xl bg-muted/60 border border-border p-4 text-center">

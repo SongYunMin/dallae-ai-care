@@ -1,5 +1,5 @@
 import type { AgentNotification, ChecklistItem, ChecklistKind } from './types';
-import { dateFromKstWallTime, kstDateKey, kstWeekday, nowKstIso } from './kst';
+import { dateFromKstWallTime, kstDateKey, kstWeekday, nowKstIso } from './kst.ts';
 
 export function todayKey(d: Date = new Date()): string {
   return kstDateKey(d);

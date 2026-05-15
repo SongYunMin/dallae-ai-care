@@ -22,6 +22,7 @@ import { Route as RecordsIndexRouteImport } from './routes/records.index'
 import { Route as ReportsCareSessionIdRouteImport } from './routes/reports/$careSessionId'
 import { Route as RecordsNewRouteImport } from './routes/records.new'
 import { Route as OnboardingParentRouteImport } from './routes/onboarding/parent'
+import { Route as LoginParentRouteImport } from './routes/login/parent'
 import { Route as InviteTokenRouteImport } from './routes/invite/$token'
 import { Route as ApiThankyouRouteImport } from './routes/api/thankyou'
 import { Route as ApiAgentRouteImport } from './routes/api/agent'
@@ -93,6 +94,11 @@ const OnboardingParentRoute = OnboardingParentRouteImport.update({
   path: '/onboarding/parent',
   getParentRoute: () => rootRouteImport,
 } as any)
+const LoginParentRoute = LoginParentRouteImport.update({
+  id: '/login/parent',
+  path: '/login/parent',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const InviteTokenRoute = InviteTokenRouteImport.update({
   id: '/invite/$token',
   path: '/invite/$token',
@@ -134,6 +140,7 @@ export interface FileRoutesByFullPath {
   '/api/agent': typeof ApiAgentRoute
   '/api/thankyou': typeof ApiThankyouRoute
   '/invite/$token': typeof InviteTokenRoute
+  '/login/parent': typeof LoginParentRoute
   '/onboarding/parent': typeof OnboardingParentRoute
   '/records/new': typeof RecordsNewRoute
   '/reports/$careSessionId': typeof ReportsCareSessionIdRouteWithChildren
@@ -153,6 +160,7 @@ export interface FileRoutesByTo {
   '/api/agent': typeof ApiAgentRoute
   '/api/thankyou': typeof ApiThankyouRoute
   '/invite/$token': typeof InviteTokenRoute
+  '/login/parent': typeof LoginParentRoute
   '/onboarding/parent': typeof OnboardingParentRoute
   '/records/new': typeof RecordsNewRoute
   '/records': typeof RecordsIndexRoute
@@ -173,6 +181,7 @@ export interface FileRoutesById {
   '/api/agent': typeof ApiAgentRoute
   '/api/thankyou': typeof ApiThankyouRoute
   '/invite/$token': typeof InviteTokenRoute
+  '/login/parent': typeof LoginParentRoute
   '/onboarding/parent': typeof OnboardingParentRoute
   '/records/new': typeof RecordsNewRoute
   '/reports/$careSessionId': typeof ReportsCareSessionIdRouteWithChildren
@@ -195,6 +204,7 @@ export interface FileRouteTypes {
     | '/api/agent'
     | '/api/thankyou'
     | '/invite/$token'
+    | '/login/parent'
     | '/onboarding/parent'
     | '/records/new'
     | '/reports/$careSessionId'
@@ -214,6 +224,7 @@ export interface FileRouteTypes {
     | '/api/agent'
     | '/api/thankyou'
     | '/invite/$token'
+    | '/login/parent'
     | '/onboarding/parent'
     | '/records/new'
     | '/records'
@@ -233,6 +244,7 @@ export interface FileRouteTypes {
     | '/api/agent'
     | '/api/thankyou'
     | '/invite/$token'
+    | '/login/parent'
     | '/onboarding/parent'
     | '/records/new'
     | '/reports/$careSessionId'
@@ -254,6 +266,7 @@ export interface RootRouteChildren {
   ApiAgentRoute: typeof ApiAgentRoute
   ApiThankyouRoute: typeof ApiThankyouRoute
   InviteTokenRoute: typeof InviteTokenRoute
+  LoginParentRoute: typeof LoginParentRoute
   OnboardingParentRoute: typeof OnboardingParentRoute
   ReportsCareSessionIdRoute: typeof ReportsCareSessionIdRouteWithChildren
 }
@@ -351,6 +364,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OnboardingParentRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/login/parent': {
+      id: '/login/parent'
+      path: '/login/parent'
+      fullPath: '/login/parent'
+      preLoaderRoute: typeof LoginParentRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/invite/$token': {
       id: '/invite/$token'
       path: '/invite/$token'
@@ -428,6 +448,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiAgentRoute: ApiAgentRoute,
   ApiThankyouRoute: ApiThankyouRoute,
   InviteTokenRoute: InviteTokenRoute,
+  LoginParentRoute: LoginParentRoute,
   OnboardingParentRoute: OnboardingParentRoute,
   ReportsCareSessionIdRoute: ReportsCareSessionIdRouteWithChildren,
 }

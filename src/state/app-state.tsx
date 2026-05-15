@@ -52,9 +52,16 @@ import {
   type ParentOnboardingResult,
 } from '@/lib/api';
 import { nowKstIso } from '@/lib/kst';
+import { isValidParentDemoLogin } from '@/lib/parent-demo-auth';
+import {
+  isCaregiverRole,
+  mergeBootstrappedFamilyMembers,
+  resolveBootstrappedCurrentUser,
+} from '@/lib/user-session';
 
 export type Screen =
   | 'splash'
+  | 'parentLogin'
   | 'onboarding'
   | 'dashboard'
   | 'records'
@@ -73,6 +80,7 @@ type Toast = { id: string; text: string };
 export type PendingChatQuestion = { sourceId?: string; question: string };
 
 const DEMO_STORAGE_KEY = 'dallae.demoMode';
+const PARENT_LOGIN_STORAGE_KEY = 'dallae.parentDemoLogin';
 
 const EMPTY_CHILD: Child = {
   id: DEFAULT_CHILD_ID,
@@ -91,6 +99,7 @@ const DEFAULT_PARENT = {
 
 const SCREEN_PATHS: Partial<Record<Screen, string>> = {
   splash: '/',
+  parentLogin: '/login/parent',
   onboarding: '/onboarding/parent',
   dashboard: '/dashboard',
   records: '/records',
@@ -106,6 +115,7 @@ const SCREEN_PATHS: Partial<Record<Screen, string>> = {
 
 function screenFromPath(pathname: string): { screen: Screen; payload: unknown } {
   if (pathname === '/') return { screen: 'splash', payload: null };
+  if (pathname === '/login/parent') return { screen: 'parentLogin', payload: null };
   if (pathname === '/onboarding/parent') return { screen: 'onboarding', payload: null };
   if (pathname === '/dashboard') return { screen: 'dashboard', payload: null };
   if (pathname === '/records/new') return { screen: 'recordNew', payload: null };
@@ -124,6 +134,21 @@ function screenFromPath(pathname: string): { screen: Screen; payload: unknown } 
   if (report) return { screen: 'report', payload: { careSessionId: decodeURIComponent(report[1]) } };
   return { screen: 'dashboard', payload: null };
 }
+
+const PROTECTED_APP_SCREENS = new Set<Screen>([
+  'onboarding',
+  'dashboard',
+  'records',
+  'recordNew',
+  'careMode',
+  'chat',
+  'notifications',
+  'family',
+  'rules',
+  'report',
+  'thankYouReport',
+  'checklist',
+]);
 
 function pathForScreen(screen: Screen, payload?: unknown): string {
   const p = payload as { token?: string; careSessionId?: string } | undefined;
@@ -166,6 +191,8 @@ type AppState = {
   demoMode: boolean;
   enterDemoMode: () => void;
   exitDemoMode: () => void;
+  isParentLoggedIn: boolean;
+  loginParentDemo: (id: string, password: string) => boolean;
   isBootstrapping: boolean;
   loadError: string | null;
 
@@ -235,6 +262,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [demoMode, setDemoMode] = useState(() =>
     typeof window !== 'undefined' ? window.sessionStorage.getItem(DEMO_STORAGE_KEY) === '1' : false,
   );
+  const [isParentLoggedIn, setParentLoggedIn] = useState(() =>
+    typeof window !== 'undefined' ? window.sessionStorage.getItem(PARENT_LOGIN_STORAGE_KEY) === '1' : false,
+  );
   const [isBootstrapping, setIsBootstrapping] = useState(() =>
     typeof window !== 'undefined' ? window.sessionStorage.getItem(DEMO_STORAGE_KEY) !== '1' : true,
   );
@@ -263,6 +293,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setScreen(next.screen);
     setPayload(next.payload);
   }, [pathname]);
+
+  useEffect(() => {
+    if (demoMode || !PROTECTED_APP_SCREENS.has(screen)) return;
+    if (isParentLoggedIn || isCaregiverRole(currentUser.role)) return;
+
+    // 시연용 로그인 전에는 주요 앱 화면 직접 진입을 막아 부모 시작 흐름을 유지한다.
+    setPayload(null);
+    setHistory([]);
+    setScreen('parentLogin');
+    void routeNavigate({ to: pathForScreen('parentLogin'), replace: true });
+  }, [currentUser.role, demoMode, isParentLoggedIn, routeNavigate, screen]);
 
   const navigate = useCallback((s: Screen, p?: unknown) => {
     setPayload(p ?? null);
@@ -347,12 +388,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     ])
       .then(([status, rules, members, loadedRecords, loadedNotifications, loadedChecklist]) => {
         if (!active) return;
-        const parent = members.find((member) => member.role === 'PARENT_ADMIN') ?? members[0];
         setChild(status.child);
         setParentRules(rules.rules.length > 0 ? rules.rules : status.activeRules);
         setEditableParentRules(rules.parentRules);
-        setFamilyMembers(members);
-        setCurrentUserState(parent ? { id: parent.id, name: parent.name, role: parent.role } : DEFAULT_PARENT);
+        setFamilyMembers((currentMembers) => mergeBootstrappedFamilyMembers(members, currentMembers));
+        setCurrentUserState((current) => resolveBootstrappedCurrentUser(current, members, DEFAULT_PARENT));
         setRecords(sortRecords(loadedRecords));
         setNotifications(loadedNotifications);
         setChecklist(loadedChecklist);
@@ -458,9 +498,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const enterDemoMode = useCallback(() => {
     if (typeof window !== 'undefined') window.sessionStorage.setItem(DEMO_STORAGE_KEY, '1');
+    if (typeof window !== 'undefined') window.sessionStorage.removeItem(PARENT_LOGIN_STORAGE_KEY);
     setDemoMode(true);
+    setParentLoggedIn(false);
     applyDemoState();
   }, [applyDemoState]);
+
+  const loginParentDemo = useCallback((id: string, password: string) => {
+    if (!isValidParentDemoLogin(id, password)) return false;
+
+    // 백엔드 인증이 아니라 시연용 프론트 게이트만 여는 흐름이다.
+    if (typeof window !== 'undefined') {
+      window.sessionStorage.removeItem(DEMO_STORAGE_KEY);
+      window.sessionStorage.setItem(PARENT_LOGIN_STORAGE_KEY, '1');
+    }
+    setDemoMode(false);
+    setParentLoggedIn(true);
+    setCurrentUserState(DEFAULT_PARENT);
+    setHistory([]);
+    setPayload(null);
+    routeNavigate({ to: pathForScreen('dashboard') });
+    if (typeof window !== 'undefined') window.scrollTo(0, 0);
+    return true;
+  }, [routeNavigate]);
 
   const value: AppState = {
     screen,
@@ -471,6 +531,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     demoMode,
     enterDemoMode,
     exitDemoMode,
+    isParentLoggedIn,
+    loginParentDemo,
     isBootstrapping,
     loadError,
     child,
@@ -550,6 +612,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     },
     logout: () => {
       exitDemoMode();
+      if (typeof window !== 'undefined') window.sessionStorage.removeItem(PARENT_LOGIN_STORAGE_KEY);
+      setParentLoggedIn(false);
       setSession(null);
       setLastEnded(null);
       setInvite(null);

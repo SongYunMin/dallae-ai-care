@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { collectChecklistNotificationUpdates } from '../src/lib/checklist';
+import { collectChecklistNotificationUpdates } from '../src/lib/checklist.ts';
 import type { ChecklistItem } from '../src/lib/types';
 
 const parentChecklist: ChecklistItem = {

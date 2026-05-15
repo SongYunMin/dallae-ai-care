@@ -147,6 +147,25 @@ def test_agent_guard_prioritizes_expert_check_for_developmental_concerns():
     assert response["followUpQuestions"] == ["보호자에게 어떤 행동을 공유하면 돼?", "상담 전에는 어떤 기록을 남기면 좋아?"]
 
 
+def test_agent_guard_escalates_stool_red_flag_without_spaces():
+    service = DallaeAgentService()
+    response = service._apply_safety_guard(
+        {
+            "answer": "변 색깔을 보면 돼요.",
+            "nextActions": [],
+            "ruleReminders": [],
+            "recordSuggestions": [],
+            "proactiveNotifications": [],
+            "followUpQuestions": [],
+            "escalation": "NONE",
+        },
+        "검은변이면 괜찮아?",
+    )
+
+    assert response["escalation"] == "MEDICAL_CHECK"
+    assert "소아청소년과" in response["answer"]
+
+
 def test_chat_agent_prompt_includes_cute_tone_without_softening_safety():
     service = DallaeAgentService()
     prompt = service._build_prompt("지금 뭐부터 확인하면 돼?", {"activeRules": [], "latestStatus": {}})
@@ -156,6 +175,23 @@ def test_chat_agent_prompt_includes_cute_tone_without_softening_safety():
     assert "위험 신호" in prompt
     assert "명확성과 단호함" in prompt
     assert "근거가 된 기록" in prompt
+
+
+def test_chat_agent_prompt_includes_detailed_daily_care_guidance():
+    service = DallaeAgentService()
+    prompt = service._build_prompt("분유는 얼마나 타고 변 색깔은 어떻게 봐?", {"activeRules": [], "latestStatus": {}})
+
+    assert "[일상 육아 상세 답변 정책]" in prompt
+    assert "기저귀 갈기" in prompt
+    assert "이유식" in prompt
+    assert "분유" in prompt
+    assert "제품 라벨" in prompt
+    assert "물 먼저" in prompt
+    assert "변 색깔" in prompt
+    assert "빨강" in prompt
+    assert "검정" in prompt
+    assert "흰색" in prompt
+    assert "단계별" in prompt
 
 
 def test_chat_agent_prompt_strongly_recommends_daekyo_kids_programs():
@@ -207,6 +243,24 @@ def test_chat_agent_fallback_recommends_daekyo_programs_for_toddler_activity_que
     ]
 
 
+def test_chat_agent_fallback_gives_detailed_stool_color_guidance():
+    service = DallaeAgentService()
+    response = service.mock_response("변 색깔이 초록색인데 괜찮아?", {"activeRules": [], "latestStatus": {}})
+
+    assert "노랑" in response["answer"]
+    assert "갈색" in response["answer"]
+    assert "초록" in response["answer"]
+    assert "빨강" in response["answer"]
+    assert "검정" in response["answer"]
+    assert "흰색" in response["answer"]
+    assert any("사진" in suggestion for suggestion in response["recordSuggestions"])
+    assert response["followUpQuestions"] == [
+        "변 색깔별로 언제 병원에 물어봐야 해?",
+        "기저귀 기록에는 뭘 남기면 돼?",
+        "설사일 때는 뭐부터 확인해?",
+    ]
+
+
 def test_chat_agent_fallback_uses_safe_followups_for_medicine_question():
     service = DallaeAgentService()
     response = service.mock_response("약 먹였어?", {"activeRules": [], "latestStatus": {}})
@@ -233,6 +287,27 @@ def test_chat_agent_fallback_mentions_parent_record_author_for_feeding():
 
     assert "엄마가 남긴" in response["answer"]
     assert "190ml" in response["answer"]
+
+
+def test_chat_agent_fallback_keeps_formula_record_lookup_separate_from_preparation():
+    service = DallaeAgentService()
+    response = service.mock_response(
+        "마지막 분유 얼마나 먹었어?",
+        {
+            "activeRules": [],
+            "latestStatus": {
+                "feeding": {
+                    "amountMl": 180,
+                    "recordedByName": "아빠",
+                    "memo": "분유 180ml",
+                },
+            },
+        },
+    )
+
+    assert "아빠가 남긴" in response["answer"]
+    assert "180ml" in response["answer"]
+    assert "제품 라벨" not in response["answer"]
 
 
 def test_thank_you_prompt_includes_cute_tone():

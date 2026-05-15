@@ -76,7 +76,7 @@ export function SplashScreen() {
           <button
             onClick={() => {
               exitDemoMode();
-              navigate('onboarding');
+              navigate('parentLogin');
             }}
             className="group flex w-full items-center gap-3 rounded-[1.5rem] bg-primary px-4 py-3.5 text-left text-primary-foreground shadow-soft active:scale-[0.99] transition-transform"
           >
