@@ -23,16 +23,91 @@ import moodSick from "@/assets/moods/ion-sick.png";
 import moodSleepy from "@/assets/moods/ion-sleepy.png";
 import moodSurprised from "@/assets/moods/ion-surprised.png";
 
-type SpeechRecognitionCtor = new () => {
+type SpeechRecognitionResultLike = {
+  0?: { transcript?: string };
+};
+
+type SpeechRecognitionEventLike = {
+  results: ArrayLike<SpeechRecognitionResultLike>;
+};
+
+type SpeechRecognitionErrorLike = {
+  error?: string;
+  message?: string;
+};
+
+type SpeechRecognitionInstance = {
   lang: string;
+  continuous?: boolean;
   interimResults: boolean;
   maxAlternatives: number;
   start: () => void;
   stop: () => void;
-  onresult: ((event: { results: ArrayLike<{ 0: { transcript: string } }> }) => void) | null;
-  onerror: (() => void) | null;
+  abort?: () => void;
+  onresult: ((event: SpeechRecognitionEventLike) => void) | null;
+  onerror: ((event: SpeechRecognitionErrorLike) => void) | null;
   onend: (() => void) | null;
 };
+
+type SpeechRecognitionCtor = new () => SpeechRecognitionInstance;
+
+function collectSpeechTranscript(results: ArrayLike<SpeechRecognitionResultLike>): string {
+  // 브라우저 음성 인식은 한 문장을 여러 결과 조각으로 나눠 줄 수 있어 전체 결과를 합쳐 입력칸에 반영한다.
+  return Array.from(results, (result) => result[0]?.transcript?.trim() ?? "")
+    .filter(Boolean)
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function speechRecognitionErrorMessage(error?: string, message?: string): string {
+  if (error === "not-allowed" || error === "service-not-allowed") {
+    return "마이크 권한이 막혀 있어요. 브라우저 권한을 허용한 뒤 다시 눌러주세요.";
+  }
+  if (error === "audio-capture") {
+    return "마이크 장치를 찾지 못했어요. 기기 마이크가 켜져 있는지 확인해 주세요.";
+  }
+  if (error === "network") {
+    return "브라우저 음성 인식 서버에 연결하지 못했어요. 네트워크나 브라우저 음성 인식 지원 상태를 확인해 주세요.";
+  }
+  if (error === "no-speech") {
+    return "음성을 듣지 못했어요. 조금 더 가까이 말하거나 텍스트로 입력해 주세요.";
+  }
+  if (error === "language-not-supported") {
+    return "이 브라우저가 한국어 음성 인식을 지원하지 않아요. Chrome에서 다시 시도해 주세요.";
+  }
+  if (error === "aborted") {
+    return "음성 인식이 중단됐어요. 다시 한 번 눌러 말해 주세요.";
+  }
+  const detail = [error, message].filter(Boolean).join(": ");
+  return `음성 인식에 실패했어요${detail ? ` (${detail})` : ""}. 텍스트로 입력해 주세요.`;
+}
+
+async function requestMicrophoneAccess(): Promise<string | null> {
+  if (typeof window === "undefined") return "음성 인식은 브라우저에서만 사용할 수 있어요.";
+  if (!window.isSecureContext) {
+    return "마이크는 HTTPS 또는 localhost 주소에서만 사용할 수 있어요. 배포 주소나 localhost로 열어 주세요.";
+  }
+  if (!navigator.mediaDevices?.getUserMedia) {
+    return "이 브라우저는 마이크 권한 확인을 지원하지 않아요. Chrome에서 다시 시도해 주세요.";
+  }
+
+  try {
+    // SpeechRecognition이 바로 `not-allowed`로 끝나는 브라우저가 있어 마이크 권한을 먼저 명시적으로 요청한다.
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    stream.getTracks().forEach((track) => track.stop());
+    return null;
+  } catch (err) {
+    const name = err instanceof DOMException ? err.name : "";
+    if (name === "NotAllowedError" || name === "SecurityError") {
+      return "마이크 권한이 차단돼 있어요. 주소창의 사이트 설정에서 마이크를 허용해 주세요.";
+    }
+    if (name === "NotFoundError" || name === "DevicesNotFoundError") {
+      return "사용 가능한 마이크를 찾지 못했어요. 기기 마이크 연결 상태를 확인해 주세요.";
+    }
+    return "마이크를 시작하지 못했어요. 브라우저 권한과 기기 마이크 상태를 확인해 주세요.";
+  }
+}
 
 const quick: { type: CareRecordType; label: string }[] = [
   { type: "FEEDING", label: "분유 먹였어요" },
@@ -101,6 +176,7 @@ export function CareModeScreen() {
   const isParent = currentUser.role === "PARENT_ADMIN" || currentUser.role === "PARENT_EDITOR";
   const canWriteRecords = currentUser.role !== "CAREGIVER_VIEWER";
   const recordsRef = useRef(records);
+  const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
 
   useEffect(() => {
     recordsRef.current = records;
@@ -116,6 +192,13 @@ export function CareModeScreen() {
   useEffect(() => {
     // 서버와 클라이언트에서 생성 시간이 달라지는 시간 기반 기록은 마운트 이후에만 화면에 붙여 hydration 차이를 피한다.
     setClientReady(true);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      recognitionRef.current?.abort?.();
+      recognitionRef.current = null;
+    };
   }, []);
 
   if (!session && !isParent) {
@@ -236,9 +319,14 @@ export function CareModeScreen() {
     }
   };
 
-  const onVoiceRecord = () => {
+  const onVoiceRecord = async () => {
     if (!canWriteRecords) {
       toast("조회 전용 권한이라 기록할 수 없어요.");
+      return;
+    }
+    if (listening) {
+      recognitionRef.current?.stop();
+      setListening(false);
       return;
     }
     const SpeechRecognition =
@@ -251,23 +339,41 @@ export function CareModeScreen() {
       toast("이 브라우저는 음성 인식을 지원하지 않아요. 아래 칸에 말한 내용을 적어주세요.");
       return;
     }
+    const microphoneError = await requestMicrophoneAccess();
+    if (microphoneError) {
+      toast(microphoneError);
+      return;
+    }
 
     // 조부모 사용자가 긴 입력 없이 한 문장으로 기록할 수 있게 음성을 텍스트로 옮긴다.
     const recognition = new SpeechRecognition();
     recognition.lang = "ko-KR";
-    recognition.interimResults = false;
+    recognition.continuous = false;
+    recognition.interimResults = true;
     recognition.maxAlternatives = 1;
     recognition.onresult = (event) => {
-      const transcript = event.results[0]?.[0]?.transcript?.trim();
+      const transcript = collectSpeechTranscript(event.results);
       if (transcript) setText(transcript);
     };
-    recognition.onerror = () => {
-      toast("음성을 듣지 못했어요. 텍스트로 입력해 주세요.");
+    recognition.onerror = (event) => {
+      console.warn("[CareMode] speech recognition error", event.error, event.message);
+      toast(speechRecognitionErrorMessage(event.error, event.message));
+      if (recognitionRef.current === recognition) recognitionRef.current = null;
       setListening(false);
     };
-    recognition.onend = () => setListening(false);
-    setListening(true);
-    recognition.start();
+    recognition.onend = () => {
+      if (recognitionRef.current === recognition) recognitionRef.current = null;
+      setListening(false);
+    };
+    recognitionRef.current = recognition;
+    try {
+      recognition.start();
+      setListening(true);
+    } catch {
+      recognitionRef.current = null;
+      setListening(false);
+      toast("음성 인식을 시작하지 못했어요. 브라우저 권한을 확인해 주세요.");
+    }
   };
 
   const sessionDisplayName = session ? caregiverDisplayName(session) : currentUser.name;

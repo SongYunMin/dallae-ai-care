@@ -52,7 +52,6 @@ import {
   type ParentOnboardingResult,
 } from '@/lib/api';
 import { nowKstIso } from '@/lib/kst';
-import { runRouteTransition } from '@/lib/motion';
 
 export type Screen =
   | 'splash'
@@ -266,31 +265,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [pathname]);
 
   const navigate = useCallback((s: Screen, p?: unknown) => {
-    runRouteTransition(() => {
-      setPayload(p ?? null);
-      setScreen((prev) => {
-        if (prev !== s && prev !== 'splash' && prev !== 'onboarding') {
-          setHistory((h) => [...h, prev]);
-        }
-        return s;
-      });
-      routeNavigate({ to: pathForScreen(s, p) });
-      if (typeof window !== 'undefined') window.scrollTo(0, 0);
+    setPayload(p ?? null);
+    setScreen((prev) => {
+      if (prev !== s && prev !== 'splash' && prev !== 'onboarding') {
+        setHistory((h) => [...h, prev]);
+      }
+      return s;
     });
+    routeNavigate({ to: pathForScreen(s, p) });
+    if (typeof window !== 'undefined') window.scrollTo(0, 0);
   }, [routeNavigate]);
 
   const goBack = useCallback(() => {
-    runRouteTransition(() => {
-      setHistory((h) => {
-        if (h.length === 0) return h;
-        const next = h.slice(0, -1);
-        const target = h[h.length - 1];
-        setPayload(null);
-        setScreen(target);
-        routeNavigate({ to: pathForScreen(target) });
-        if (typeof window !== 'undefined') window.scrollTo(0, 0);
-        return next;
-      });
+    setHistory((h) => {
+      if (h.length === 0) return h;
+      const next = h.slice(0, -1);
+      const target = h[h.length - 1];
+      setPayload(null);
+      setScreen(target);
+      routeNavigate({ to: pathForScreen(target) });
+      if (typeof window !== 'undefined') window.scrollTo(0, 0);
+      return next;
     });
   }, [routeNavigate]);
 

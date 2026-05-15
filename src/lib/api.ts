@@ -408,17 +408,36 @@ export async function getThankYouReport(sessionId: string): Promise<ThankYouRepo
   );
 }
 
+const VOICE_AMOUNT_PATTERN = /(\d{2,3})\s*(?:m\s*l|ml|미리|밀리|밀리리터)/i;
+const FEEDING_WORD_PATTERN = /(분유|수유|모유|우유|이유식)/;
+const EATING_WORD_PATTERN = /(먹였|먹임|먹었|먹어|먹고)/;
+const MEDICINE_WORD_PATTERN = /(약|복용|해열제|영양제|시럽)/;
+const SLEEP_START_PATTERN = /(재웠|재움|잠들|잠 시작|낮잠 시작)/;
+const SLEEP_END_PATTERN = /(깼|일어났|일어남|기상|잠 끝|낮잠 끝|잠 종료|낮잠 종료)/;
+
+function extractVoiceAmountMl(text: string): number | undefined {
+  // 음성 인식 결과는 `ml`보다 `미리/밀리`로 들어오는 경우가 많아 같은 수유량 단위로 처리한다.
+  const amount = text.match(VOICE_AMOUNT_PATTERN);
+  return amount ? Number(amount[1]) : undefined;
+}
+
 export function parseTextToRecord(text: string): { type: CareRecordType; memo: string; amountMl?: number } {
-  if (/(분유|수유|먹였|먹임|모유)/.test(text)) {
-    const m = text.match(/(\d{2,3})\s*ml/i);
-    return { type: 'FEEDING', memo: text, amountMl: m ? Number(m[1]) : undefined };
-  }
+  const normalized = text.replace(/\s+/g, '');
+  const amountMl = extractVoiceAmountMl(text);
+  const hasMedicineWord = MEDICINE_WORD_PATTERN.test(text);
+  const hasFeedingWord = FEEDING_WORD_PATTERN.test(text);
+  const hasEatingWord = EATING_WORD_PATTERN.test(text);
+
+  if (hasFeedingWord || (amountMl !== undefined && hasEatingWord && !hasMedicineWord)) return { type: 'FEEDING', memo: text, amountMl };
   if (/(기저귀|응가|변)/.test(text)) return { type: 'DIAPER', memo: text };
-  if (/(낮잠|잠).*(시작|재웠|재움)/.test(text)) return { type: 'SLEEP_START', memo: text };
-  if (/(낮잠|잠).*(끝|종료|깼|일어)/.test(text)) return { type: 'SLEEP_END', memo: text };
-  if (/(잠|낮잠)/.test(text)) return { type: 'SLEEP_START', memo: text };
-  if (/약/.test(text)) return { type: 'MEDICINE', memo: text };
+  if (hasMedicineWord) return { type: 'MEDICINE', memo: text };
   if (/(울|보채|칭얼)/.test(text)) return { type: 'CRYING', memo: text };
+  if (SLEEP_END_PATTERN.test(text)) return { type: 'SLEEP_END', memo: text };
+  if (SLEEP_START_PATTERN.test(text)) return { type: 'SLEEP_START', memo: text };
+  if (/(잠|낮잠)/.test(normalized)) {
+    if (/(끝|종료|깼|일어)/.test(text)) return { type: 'SLEEP_END', memo: text };
+    return { type: 'SLEEP_START', memo: text };
+  }
   return { type: 'NOTE', memo: text };
 }
 

@@ -41,6 +41,32 @@ def test_voice_parser_extracts_feeding_amount():
     assert parsed["amountMl"] == 160
 
 
+def test_voice_parser_accepts_korean_stt_amount_units():
+    parsed = parse_voice_note_to_record("지금 분유 160미리 먹였어")
+
+    assert parsed["type"] == "FEEDING"
+    assert parsed["amountMl"] == 160
+
+
+def test_voice_parser_infers_feeding_from_amount_and_eating_word():
+    parsed = parse_voice_note_to_record("방금 160 밀리 먹었어")
+
+    assert parsed["type"] == "FEEDING"
+    assert parsed["amountMl"] == 160
+
+
+def test_voice_parser_does_not_treat_medicine_as_feeding():
+    parsed = parse_voice_note_to_record("약 먹였어")
+
+    assert parsed["type"] == "MEDICINE"
+
+
+def test_voice_parser_recognizes_common_sleep_start_phrase():
+    parsed = parse_voice_note_to_record("재웠어")
+
+    assert parsed["type"] == "SLEEP_START"
+
+
 def test_now_iso_uses_kst_offset():
     assert now_iso().endswith("+09:00")
 

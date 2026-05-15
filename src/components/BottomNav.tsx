@@ -32,23 +32,14 @@ export function BottomNav() {
             <li key={t.id}>
               <button
                 onClick={() => navigate(t.id)}
-                className={`ion-nav-item isolate relative w-full flex flex-col items-center gap-1 py-1.5 rounded-xl transition-colors ${
+                className={`relative w-full flex flex-col items-center gap-1 py-1.5 rounded-xl transition-colors ${
                   Active ? "text-primary" : "text-muted-foreground"
                 }`}
               >
-                {Active && (
-                  <span className="ion-nav-active-pill absolute inset-x-2 top-1 bottom-1 rounded-2xl bg-primary/12" />
-                )}
-                <span className="relative z-10 flex h-6 w-6 items-center justify-center">
-                  <Icon
-                    size={22}
-                    strokeWidth={Active ? 2.4 : 2}
-                    className={Active ? "scale-105 transition-transform" : "transition-transform"}
-                  />
-                </span>
-                <span className="relative z-10 text-[11px] font-medium">{t.label}</span>
+                <Icon size={22} strokeWidth={Active ? 2.4 : 2} />
+                <span className="text-[11px] font-medium">{t.label}</span>
                 {t.id === "dashboard" && unread > 0 && (
-                  <span className="absolute top-0 right-1/2 z-20 translate-x-4 bg-coral text-coral-foreground text-[10px] font-bold rounded-full min-w-[16px] h-4 px-1 flex items-center justify-center">
+                  <span className="absolute top-0 right-1/2 translate-x-4 bg-coral text-coral-foreground text-[10px] font-bold rounded-full min-w-[16px] h-4 px-1 flex items-center justify-center">
                     {unread}
                   </span>
                 )}

@@ -119,8 +119,6 @@ def test_family_member_update_delete_guards_and_preserves_history(monkeypatch, t
             "caregiverId": "user_grandma_1",
         },
     )
-    blocked = client.delete("/api/families/family_1/members/user_grandma_1")
-    client.post(f"/api/care-sessions/{session.json()['careSessionId']}/end", json={"counts": {}})
     deleted = client.delete("/api/families/family_1/members/user_grandma_1")
     members = client.get("/api/families/family_1/members")
     records = client.get("/api/records?childId=child_1")
@@ -140,12 +138,11 @@ def test_family_member_update_delete_guards_and_preserves_history(monkeypatch, t
     assert session.status_code == 200
     assert session.json()["caregiverName"] == "민지 이모"
     assert session.json()["relationship"] == "aunt"
-    assert blocked.status_code == 409
     assert deleted.status_code == 200
     assert deleted.json() == {"id": "user_grandma_1", "deleted": True}
     assert all(item["id"] != "user_grandma_1" for item in members.json()["members"])
     assert next(item for item in records.json()["records"] if item["id"] == historical_record["id"])["recordedByName"] == "할머니"
-    assert session_detail.json()["caregiverName"] == "민지 이모"
+    assert session_detail.status_code == 404
     assert missing_chat_user.status_code == 404
 
 
@@ -325,6 +322,42 @@ def test_duplicate_active_care_session_is_rejected(monkeypatch, tmp_path):
     assert first.status_code == 200
     assert duplicate.status_code == 409
     assert duplicate.json()["detail"] == "이미 진행 중인 돌봄 세션이 있습니다."
+
+
+def test_active_care_session_can_be_deleted_and_records_are_kept(monkeypatch, tmp_path):
+    client = make_client(monkeypatch, tmp_path)
+
+    session = client.post(
+        "/api/care-sessions/start",
+        json={"familyId": "family_1", "childId": "child_1", "caregiverId": "user_grandma_1"},
+    ).json()
+    record = client.post(
+        "/api/records",
+        json={
+            "familyId": "family_1",
+            "childId": "child_1",
+            "careSessionId": session["careSessionId"],
+            "type": "NOTE",
+            "recordedBy": "user_grandma_1",
+            "recordedByName": "할머니",
+            "source": "MANUAL",
+            "memo": "삭제될 세션의 기록",
+        },
+    ).json()
+
+    deleted = client.delete(f"/api/care-sessions/{session['careSessionId']}")
+    session_detail = client.get(f"/api/care-sessions/{session['careSessionId']}")
+    records = client.get("/api/records?childId=child_1").json()["records"]
+    restarted = client.post(
+        "/api/care-sessions/start",
+        json={"familyId": "family_1", "childId": "child_1", "caregiverId": "user_grandma_1"},
+    )
+
+    assert deleted.status_code == 200
+    assert deleted.json() == {"id": session["careSessionId"], "deleted": True}
+    assert session_detail.status_code == 404
+    assert next(item for item in records if item["id"] == record["id"]).get("careSessionId") is None
+    assert restarted.status_code == 200
 
 
 def test_care_session_start_rejects_family_child_mismatch(monkeypatch, tmp_path):

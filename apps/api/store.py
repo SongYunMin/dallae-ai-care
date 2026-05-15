@@ -304,13 +304,26 @@ class DallaeStore:
             ]
             if not admins:
                 raise ValueError("마지막 관리자 보호자는 삭제할 수 없습니다.")
-        if any(
-            session.get("caregiverId") == member_id and session.get("status") == "ACTIVE"
-            for session in self.sessions.values()
-        ):
-            raise ValueError("진행 중인 돌봄 세션의 돌봄자는 삭제할 수 없습니다.")
+        self.delete_active_sessions_for_member(family_id, member_id, persist=False)
         del self.members[member_id]
         self._persist()
+
+    def delete_active_sessions_for_member(self, family_id: str, member_id: str, *, persist: bool = True) -> list[str]:
+        """구성원 삭제에 앞서 해당 돌봄자의 진행 중 세션만 제거한다."""
+        session_ids = [
+            session_id
+            for session_id, session in self.sessions.items()
+            if (
+                session.get("familyId") == family_id
+                and session.get("caregiverId") == member_id
+                and session.get("status") == "ACTIVE"
+            )
+        ]
+        for session_id in session_ids:
+            self._delete_session(session_id)
+        if persist and session_ids:
+            self._persist()
+        return session_ids
 
     def create_invite(self, family_id: str, payload: dict, origin: str) -> dict:
         if family_id not in self.families:
@@ -467,6 +480,20 @@ class DallaeStore:
         if session_id not in self.sessions:
             raise KeyError("돌봄 세션을 찾을 수 없습니다.")
         return self.sessions[session_id]
+
+    def _delete_session(self, session_id: str) -> None:
+        """세션을 제거하면서 기록은 보존하되 삭제된 세션 참조만 끊는다."""
+        del self.sessions[session_id]
+        for record in self.records.values():
+            if record.get("careSessionId") == session_id:
+                record["careSessionId"] = None
+
+    def delete_session(self, session_id: str) -> None:
+        """진행 중/종료된 돌봄 세션을 직접 삭제한다."""
+        if session_id not in self.sessions:
+            raise KeyError("돌봄 세션을 찾을 수 없습니다.")
+        self._delete_session(session_id)
+        self._persist()
 
     def latest_session(self, child_id: str) -> dict:
         """리포트 직접 진입 시 마지막 세션을 조회한다."""

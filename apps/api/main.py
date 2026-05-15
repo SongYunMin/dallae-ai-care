@@ -547,6 +547,15 @@ def get_care_session(session_id: str) -> dict:
         raise HTTPException(status_code=404, detail=str(exc).strip("'")) from exc
 
 
+@app.delete("/api/care-sessions/{session_id}")
+def delete_care_session(session_id: str) -> dict:
+    try:
+        store.delete_session(session_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc).strip("'")) from exc
+    return {"id": session_id, "deleted": True}
+
+
 @app.post("/api/care-sessions/{session_id}/voice-notes")
 def create_voice_note(session_id: str, payload: VoiceNoteIn) -> dict:
     session = _get_session(session_id)

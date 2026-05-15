@@ -14,12 +14,10 @@ export function MobileShell({
   hideNav?: boolean;
   flushBottom?: boolean;
 }) {
-  const { screen, payload, canGoBack, goBack, navigate, toasts, isBootstrapping, loadError, demoMode } = useApp();
+  const { screen, canGoBack, goBack, navigate, toasts, isBootstrapping, loadError, demoMode } = useApp();
   const isTab = TAB_SCREENS.includes(screen);
   const showBack = !hideNav && !isTab && screen !== "splash" && screen !== "onboarding";
   const visibleToasts = toasts.slice(-3);
-  const routeMotionKey =
-    typeof payload === "object" && payload !== null ? JSON.stringify(payload) : String(payload ?? "");
 
   const onBack = () => {
     if (canGoBack) goBack();
@@ -31,12 +29,12 @@ export function MobileShell({
       className="h-dvh w-full flex justify-center overflow-hidden"
       style={{ background: "oklch(0.92 0.025 80)" }}
     >
-      <div className="ion-mobile-frame relative mx-auto w-full max-w-[430px] h-dvh overflow-hidden bg-background shadow-frame flex flex-col">
+      <div className="relative mx-auto w-full max-w-[430px] h-dvh overflow-hidden bg-background shadow-frame flex flex-col">
         {showBack && (
           <button
             onClick={onBack}
             aria-label="뒤로가기"
-            className="ion-icon-button absolute top-3 left-3 z-50 h-10 w-10 rounded-full bg-card/85 backdrop-blur shadow-card border border-border flex items-center justify-center active:scale-95 transition-transform"
+            className="absolute top-3 left-3 z-50 h-10 w-10 rounded-full bg-card/85 backdrop-blur shadow-card border border-border flex items-center justify-center active:scale-95 transition-transform"
           >
             <ChevronLeft size={22} className="text-foreground" />
           </button>
@@ -49,14 +47,7 @@ export function MobileShell({
               {isBootstrapping ? "서버 데이터를 불러오는 중이에요." : `서버 데이터를 불러오지 못했어요: ${loadError}`}
             </div>
           )}
-          {/* screen/payload가 바뀔 때만 진입 모션을 다시 재생해 화면 전환의 맥락을 만든다. */}
-          <div
-            key={`${screen}:${routeMotionKey}`}
-            className={`ion-screen-transition ${flushBottom ? "h-full min-h-0" : "min-h-full"}`}
-            data-screen={screen}
-          >
-            {children}
-          </div>
+          {children}
         </main>
         {/* 화면 어디서든 저장/실패 피드백이 보이도록 모바일 쉘에서 토스트를 한 번만 렌더링한다. */}
         {visibleToasts.length > 0 && (
@@ -72,7 +63,7 @@ export function MobileShell({
               <div
                 key={toast.id}
                 role="status"
-                className="ion-toast-motion w-full rounded-2xl bg-foreground px-4 py-3 text-center text-sm font-semibold text-background shadow-frame"
+                className="w-full rounded-2xl bg-foreground px-4 py-3 text-center text-sm font-semibold text-background shadow-frame"
               >
                 {toast.text}
               </div>
