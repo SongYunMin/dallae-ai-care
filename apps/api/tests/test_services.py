@@ -164,6 +164,16 @@ def test_store_persists_records_to_json(tmp_path):
     assert store_path.with_name(f"{store_path.name}.bak").exists()
 
 
+def test_store_uses_tmp_path_on_vercel(monkeypatch, tmp_path):
+    monkeypatch.setenv("VERCEL", "1")
+    monkeypatch.setenv("TMPDIR", str(tmp_path))
+    monkeypatch.delenv("DALLAE_STORE_PATH", raising=False)
+
+    store = DallaeStore()
+
+    assert store.store_path == tmp_path / "dallae-store.json"
+
+
 def test_store_persists_invite_member_and_session_mapping_to_json(tmp_path):
     store_path = tmp_path / "invite-session-test.store.json"
     store = DallaeStore(store_path)

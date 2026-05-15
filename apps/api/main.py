@@ -21,15 +21,10 @@ app = FastAPI(title="Dallae MVP API", version="0.1.0")
 
 app.add_middleware(
     CORSMiddleware,
-    # 로컬 프론트 개발 서버가 Lovable/Vite 설정에 따라 5173 또는 8080으로 뜰 수 있어 둘 다 허용한다.
-    allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-        "http://localhost:8080",
-        "http://127.0.0.1:8080",
-        "http://localhost:3000",
-    ],
-    allow_credentials=True,
+    # 1회성 시연 배포에서는 Vercel/Render preview 도메인이 바뀔 수 있어 모든 Origin을 허용한다.
+    # 쿠키 인증을 쓰지 않으므로 wildcard CORS와 충돌하지 않게 credentials는 비활성화한다.
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )

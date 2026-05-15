@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import tempfile
 import threading
 from datetime import date, datetime
 from json import JSONDecodeError
@@ -14,6 +15,13 @@ from services.time_service import now_kst_iso
 
 def now_iso() -> str:
     return now_kst_iso()
+
+
+def _default_store_path() -> Path:
+    """Vercel 서버리스에서는 쓰기 가능한 /tmp를 기본 JSON 저장소로 사용한다."""
+    if os.getenv("VERCEL"):
+        return Path(os.getenv("TMPDIR") or tempfile.gettempdir()) / "dallae-store.json"
+    return Path("./dallae-store.json")
 
 
 def _format_item_time(time: str) -> str:
@@ -47,7 +55,7 @@ class DallaeStore:
 
     def __init__(self, store_path: str | Path | None = None) -> None:
         env_path = os.getenv("DALLAE_STORE_PATH")
-        self.store_path = Path(store_path or env_path or "./dallae-store.json")
+        self.store_path = Path(store_path or env_path) if (store_path or env_path) else _default_store_path()
         self._lock = threading.RLock()
         self._reset_state()
         if self.store_path.exists():

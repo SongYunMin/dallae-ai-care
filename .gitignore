@@ -28,6 +28,7 @@ dist-ssr
 .vinxi
 .tanstack/**
 .nitro
+.vercel/
 *.local
 
 # Wrangler / Cloudflare
