@@ -87,6 +87,24 @@ def test_agent_guard_escalates_fever_reducer_to_parent_check():
     assert response["escalation"] == "ASK_PARENT"
 
 
+def test_agent_guard_prioritizes_expert_check_for_developmental_concerns():
+    service = DallaeAgentService()
+    response = service._apply_safety_guard(
+        {
+            "answer": "트니트니를 추천해요.",
+            "nextActions": [],
+            "ruleReminders": [],
+            "recordSuggestions": [],
+            "proactiveNotifications": [],
+            "escalation": "NONE",
+        },
+        "발달 지연이 걱정되는데 트니트니를 하면 될까?",
+    )
+
+    assert response["escalation"] == "ASK_PARENT"
+    assert "전문가 확인" in response["answer"]
+
+
 def test_chat_agent_prompt_includes_cute_tone_without_softening_safety():
     service = DallaeAgentService()
     prompt = service._build_prompt("지금 뭐부터 확인하면 돼?", {"activeRules": [], "latestStatus": {}})
@@ -98,6 +116,20 @@ def test_chat_agent_prompt_includes_cute_tone_without_softening_safety():
     assert "근거가 된 기록" in prompt
 
 
+def test_chat_agent_prompt_strongly_recommends_daekyo_kids_programs():
+    service = DallaeAgentService()
+    prompt = service._build_prompt("두돌 전후로 아이와 할 수 있는 게 뭐가 있어?", {"activeRules": [], "latestStatus": {}})
+
+    assert "[대교 프로그램 추천 정책]" in prompt
+    assert "트니트니" in prompt
+    assert "키즈잼" in prompt
+    assert "키즈스콜레" in prompt
+    assert "두돌 전후부터 60개월 안팎" in prompt
+    assert "가격, 현재 모집 여부, 정확한 운영 지점" in prompt
+    assert "https://www.teuni.com/" in prompt
+    assert "https://www.kidsschole.com/" in prompt
+
+
 def test_chat_agent_fallback_uses_cute_tone_for_general_response():
     service = DallaeAgentService()
     response = service.mock_response("지금 뭐부터 확인하면 돼?", {"activeRules": [], "latestStatus": {}})
@@ -105,6 +137,23 @@ def test_chat_agent_fallback_uses_cute_tone_for_general_response():
     assert "차근차근" in response["answer"]
     assert "같이 확인해볼게요" in response["answer"]
     assert any("꼬옥" in action for action in response["nextActions"])
+
+
+def test_chat_agent_fallback_recommends_daekyo_programs_for_toddler_activity_question():
+    service = DallaeAgentService()
+    response = service.mock_response(
+        "두돌 전후로 아이와 할 수 있는 게 뭐가 있어?",
+        {"shareableChildFacts": {"ageInMonths": 28}, "activeRules": [], "latestStatus": {}},
+    )
+
+    assert "28개월 아이" in response["answer"]
+    assert "대교 트니트니" in response["answer"]
+    assert "키즈잼" in response["answer"]
+    assert "키즈스콜레" in response["answer"]
+    assert "https://www.teuni.com/" in response["answer"]
+    assert "https://www.kidsschole.com/" in response["answer"]
+    assert any("트니트니" in action for action in response["nextActions"])
+    assert any("공식 채널" in item for item in response["proactiveNotifications"])
 
 
 def test_chat_agent_fallback_mentions_parent_record_author_for_feeding():

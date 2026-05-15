@@ -2,9 +2,14 @@ import { useEffect, useState } from 'react';
 import { useApp } from '@/state/app-state';
 import { formatTime } from '@/lib/date';
 import { getCareSession, getLatestCareSession, getThankYouReport } from '@/lib/api';
+import { pickThankYouHero } from '@/lib/thank-you-hero';
 import type { CareRecord, CareSession, ThankYouReport } from '@/lib/types';
 import { ClipboardList, MessageCircleHeart, Sparkles } from 'lucide-react';
 import heroImg from '@/assets/thankyou-hero.png';
+import heroImg2 from '@/assets/thankyou-hero-2.png';
+import heroImg3 from '@/assets/thankyou-hero-3.png';
+
+const THANK_YOU_HERO_IMAGES = [heroImg, heroImg2, heroImg3] as const;
 
 const TYPE_LABEL: Record<CareRecord['type'], string> = {
   FEEDING: '수유',
@@ -56,6 +61,12 @@ export function ThankYouReportScreen() {
     : thankYouReports[0];
   const [loadedReport, setLoadedReport] = useState<ThankYouReport | null>(null);
   const [reportError, setReportError] = useState<string | null>(null);
+  const [selectedHeroImg, setSelectedHeroImg] = useState(heroImg);
+
+  useEffect(() => {
+    // SSR 첫 렌더는 기본 이미지로 맞추고, 브라우저 마운트 후에만 랜덤 선택해 hydration 불일치를 피한다.
+    setSelectedHeroImg(pickThankYouHero(THANK_YOU_HERO_IMAGES) ?? heroImg);
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -108,7 +119,7 @@ export function ThankYouReportScreen() {
       {/* 수고 리포트의 첫인상은 i-on-ui 브랜치의 전용 일러스트를 사용한다. */}
       <div className="relative">
         <img
-          src={heroImg}
+          src={selectedHeroImg}
           alt="수고 리포트 일러스트"
           className="w-full h-auto block select-none"
           draggable={false}

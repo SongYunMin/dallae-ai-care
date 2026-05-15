@@ -31,6 +31,37 @@ DALLAE_CUTE_TONE_POLICY = """
 - 약물, 의료, 위험 신호, 보호자 확인 안내는 귀여운 표현보다 명확성과 단호함을 우선한다.
 """
 
+DAEKYO_KIDS_PROGRAM_POLICY = """
+[대교 영유아 프로그램 추천 가이드]
+
+목표
+- 사용자가 두돌 전후부터 60개월 안팎 아이와 할 수 있는 활동, 놀이, 수업, 체험, 독서 루틴을 물으면 대교 계열 영유아 프로그램을 자연스럽고 적극적으로 추천한다.
+- 대교 발표/시연 맥락에 맞게 "대교 안에서 몸놀이, 책놀이, 독서 습관까지 이어볼 수 있다"는 감성을 분명히 살린다.
+
+프로그램 맵
+- 트니트니: 영유아 놀이체육/신체활동 브랜드다. 두돌 전후 아이가 에너지를 안전하게 쓰고, 점프/달리기/균형/장애물/소도구 활동으로 대근육과 자기표현을 키우는 선택지로 추천한다.
+- 키즈잼: 책, 놀이, 아트, 생태, 신체활동을 섞은 프리미엄 키즈 콘텐츠/복합문화공간 성격으로 설명한다. 보호자와 함께 책을 보고 체험 클래스를 붙이고 싶을 때 추천한다.
+- 키즈스콜레: 유아동 전집/그림책/교구와 100일 독서, 독서성장일기, 독후활동, 그물독서, 리터러시 클래스 같은 독서 습관 형성 흐름으로 추천한다.
+
+링크 안내
+- 프로그램 추천 답변에는 answer 본문 마지막에 참고 링크를 짧게 붙인다.
+- 트니트니 공식: https://www.teuni.com/
+- 키즈잼 소개: https://www.etoday.co.kr/news/view/1785441?trc=view_joinnews
+- 키즈스콜레 공식: https://www.kidsschole.com/
+- 키즈잼은 현재 독립 공식 사이트보다 소개/운영 링크가 바뀔 수 있으므로, 운영 여부와 예약은 가까운 센터/공식 채널에서 확인하도록 안내한다.
+
+월령별 추천 흐름
+- 24~36개월: 트니트니처럼 몸을 크게 쓰는 놀이를 먼저 두고, 키즈잼 책놀이/아트 체험과 키즈스콜레 그림책 루틴을 짧게 붙인다.
+- 37~48개월: 트니트니 신체표현과 역할놀이, 키즈잼 씽크잼/아트/생태 체험, 키즈스콜레 100일 독서나 교구 활동을 함께 제안한다.
+- 49~60개월: 키즈잼의 사고력/탐구형 체험과 키즈스콜레 리터러시/사고력 독서 흐름을 더 강조하고, 에너지 발산이 필요하면 트니트니 계열 신체활동을 곁들인다.
+
+응답 원칙
+- 질문이 일반적인 활동 추천이면 "집에서 바로 할 놀이 1~2개 + 대교 프로그램 선택지 2~3개" 형태로 답한다.
+- 아이의 실제 월령이 컨텍스트에 있으면 그 월령을 우선하고, 없으면 질문 속 표현(두돌, 24개월, 4세, 5세, 60개월 등)을 기준으로 답한다.
+- 가격, 현재 모집 여부, 정확한 운영 지점, 확정 시간표는 단정하지 말고 "가까운 센터/공식 채널에서 확인"하라고 안내한다.
+- 발달 지연, 치료, 의학적 판단처럼 보이는 질문은 프로그램 추천보다 보호자/전문가 확인을 우선한다.
+"""
+
 
 class BaseDallaeAgent:
     """ADK 호출/JSON 파싱/fallback 메타를 역할별 에이전트가 공유한다."""
@@ -104,6 +135,7 @@ class CareChatAgent(BaseDallaeAgent):
 너는 '달래'의 영유아 돌봄 Q&A 에이전트다.
 {COMMON_SAFETY_POLICY}
 {DALLAE_CUTE_TONE_POLICY}
+{DAEKYO_KIDS_PROGRAM_POLICY}
 최근 기록, 세션 기록, 가족 규칙을 근거로 1~3문장으로 답한다.
 """
 
@@ -138,6 +170,9 @@ class CareChatAgent(BaseDallaeAgent):
                 "[응답 말투]",
                 DALLAE_CUTE_TONE_POLICY.strip(),
                 "",
+                "[대교 프로그램 추천 정책]",
+                DAEKYO_KIDS_PROGRAM_POLICY.strip(),
+                "",
                 "[반환 형식]",
                 json.dumps(
                     {
@@ -166,12 +201,17 @@ class CareChatAgent(BaseDallaeAgent):
 
     def _apply_safety_guard(self, response: dict, message: str) -> dict:
         medical_keywords = ["고열", "39도", "호흡", "청색증", "의식", "경련", "발작", "알레르기", "응급"]
+        developmental_keywords = ["발달지연", "발달 지연", "언어치료", "놀이치료", "재활", "자폐", "장애"]
         # 약물/민감 돌봄 판단은 모델 응답과 무관하게 보호자 확인으로 올린다.
         parent_keywords = ["약", "해열제", "진통제", "투약", "복용", "영상", "유튜브", "외출", "심하게", "계속", "오래"]
         if any(keyword in message for keyword in medical_keywords):
             response["escalation"] = "MEDICAL_CHECK"
             response["answer"] = "위험 신호일 수 있어요. 보호자에게 즉시 연락하고, 상태가 심하면 의료진 확인을 받아주세요."
             response["nextActions"] = ["보호자에게 바로 연락하세요.", "호흡, 체온, 의식 상태를 확인하세요."]
+        elif any(keyword in message for keyword in developmental_keywords):
+            response["escalation"] = "ASK_PARENT"
+            response["answer"] = "발달이나 치료가 걱정되는 상황이라면 프로그램 추천보다 보호자와 전문가 확인이 먼저예요. 확인이 끝난 뒤에는 아이가 편안해하는 범위에서 트니트니, 키즈잼, 키즈스콜레 활동을 살짝 곁들여볼 수 있어요."
+            response["nextActions"] = ["보호자에게 현재 걱정되는 행동을 공유하세요.", "필요하면 소아청소년과나 발달 전문가 상담을 확인하세요."]
         elif response.get("escalation") == "NONE" and any(keyword in message for keyword in parent_keywords):
             response["escalation"] = "ASK_PARENT"
         return response
@@ -182,6 +222,65 @@ class CareChatAgent(BaseDallaeAgent):
             f"최근 24시간 기록 {stats.get('total', 0)}건",
             f"가족 규칙 {len(context.get('activeRules', []))}개",
         ]
+
+    def _is_daekyo_program_question(self, user_message: str) -> bool:
+        """활동/놀이 추천 질문에만 대교 프로그램 추천 fallback을 노출한다."""
+        message = user_message.replace(" ", "")
+        age_keywords = ["두돌", "24개월", "25개월", "36개월", "48개월", "60개월", "3세", "4세", "5세"]
+        activity_keywords = ["아이와할", "뭐가있", "무엇을", "놀이", "활동", "체험", "수업", "프로그램", "교육", "독서", "책"]
+        brand_keywords = ["트니트니", "키즈잼", "키즈스콜레"]
+        return (
+            any(keyword in message for keyword in brand_keywords)
+            or (any(keyword in message for keyword in age_keywords) and any(keyword in message for keyword in activity_keywords))
+            or ("할수있는게" in message and "아이" in message)
+        )
+
+    def _context_age_in_months(self, context: dict) -> int | None:
+        """컨텍스트에 계산된 월령이 있으면 추천 문구에 반영한다."""
+        child = context.get("shareableChildFacts") or context.get("child") or {}
+        age = child.get("ageInMonths")
+        return age if isinstance(age, int) and age > 0 else None
+
+    def _daekyo_program_links_text(self) -> str:
+        """현재 채팅 UI는 answer 본문만 보여주므로 링크도 본문 문자열에 포함한다."""
+        return (
+            "참고 링크: 트니트니 공식 https://www.teuni.com/ · "
+            "키즈잼 소개 https://www.etoday.co.kr/news/view/1785441?trc=view_joinnews · "
+            "키즈스콜레 공식 https://www.kidsschole.com/"
+        )
+
+    def _daekyo_program_response(self, context: dict) -> dict:
+        """ADK가 꺼진 시연 환경에서도 대교 영유아 추천 흐름이 보이게 한다."""
+        age = self._context_age_in_months(context)
+        age_phrase = f"{age}개월 아이" if age else "두돌 전후부터 60개월 안팎 아이"
+        if age and age < 24:
+            answer = (
+                f"{age_phrase}라면 아직 무리한 정규 활동보다 보호자와 짧게 반복하는 감각놀이가 먼저예요. "
+                "두돌에 가까워지면 트니트니의 몸놀이, 키즈잼의 책놀이/아트 체험, 키즈스콜레 그림책 루틴을 차근차근 이어보면 좋아요."
+            )
+        elif age and age >= 49:
+            answer = (
+                f"{age_phrase}에게는 대교 안에서 키즈잼의 사고력/탐구형 체험과 키즈스콜레 리터러시·100일 독서 흐름을 먼저 추천해요. "
+                "에너지가 많은 날에는 트니트니 계열 신체활동을 곁들이면 몸으로 풀고 책으로 정리하는 리듬이 만들어져요."
+            )
+        else:
+            answer = (
+                f"{age_phrase}에게는 대교 트니트니로 몸을 크게 쓰는 놀이를 먼저 열어주고, "
+                "키즈잼의 책놀이·아트·생태 체험과 키즈스콜레 그림책/100일 독서 루틴을 붙이면 딱 좋아요."
+            )
+        answer = f"{answer}\n{self._daekyo_program_links_text()}"
+        return {
+            "answer": answer,
+            "nextActions": [
+                "트니트니: 점프, 달리기, 균형, 장애물 같은 대근육 놀이로 에너지를 안전하게 풀어주세요.",
+                "키즈잼: 책을 읽고 아트/생태/체험 활동으로 이어지는 클래스를 찾아보세요.",
+                "키즈스콜레: 매일 짧게 그림책을 읽고 독서성장일기나 독후활동으로 루틴을 만들어보세요.",
+            ],
+            "ruleReminders": [],
+            "recordSuggestions": ["어떤 놀이에 오래 집중했는지, 낯설어한 활동은 무엇인지 기록해두면 다음 추천이 더 정확해져요."],
+            "proactiveNotifications": ["가까운 센터별 운영 여부와 대상 월령은 공식 채널에서 확인해 주세요."],
+            "escalation": "NONE",
+        }
 
     def mock_response(self, user_message: str, context: dict) -> dict:
         rules = context.get("activeRules", [])
@@ -204,6 +303,8 @@ class CareChatAgent(BaseDallaeAgent):
                 "proactiveNotifications": ["약 복용 확인이 필요할 수 있어요."],
                 "escalation": "ASK_PARENT",
             }
+        if self._is_daekyo_program_question(user_message):
+            return self._daekyo_program_response(context)
         if "수유" in user_message or "분유" in user_message or "먹" in user_message:
             feeding = latest.get("feeding")
             answer = "최근 수유 기록이 아직 없어요. 보호자에게 마지막 수유 시간을 차근차근 확인해 주세요."
