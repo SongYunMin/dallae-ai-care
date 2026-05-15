@@ -15,6 +15,7 @@ import type {
   ThankYouReport,
   UserRole,
 } from './types';
+import { sharedRecordQueryString } from './shared-record-sync';
 
 export const DEFAULT_FAMILY_ID = 'family_1';
 export const DEFAULT_CHILD_ID = 'child_1';
@@ -302,10 +303,8 @@ export async function createCareRecord(input: {
   });
 }
 
-export async function listCareRecords(childId = DEFAULT_CHILD_ID): Promise<CareRecord[]> {
-  const res = await requestJson<{ records: CareRecord[] }>(
-    `/api/records?childId=${encodeURIComponent(childId)}`,
-  );
+export async function listCareRecords(childId = DEFAULT_CHILD_ID, actorId?: string): Promise<CareRecord[]> {
+  const res = await requestJson<{ records: CareRecord[] }>(`/api/records?${sharedRecordQueryString(childId, actorId)}`);
   return res.records;
 }
 

@@ -405,9 +405,16 @@ def update_child(child_id: str, payload: ChildPatchIn) -> dict:
 
 
 @app.get("/api/records")
-def list_records(childId: str = "child_1") -> dict:
+def list_records(childId: str = "child_1", actorId: str | None = None) -> dict:
     _get_child(childId)
-    return {"records": store.child_records(childId)}
+    if actorId:
+        _get_member(actorId)
+    try:
+        return {"records": store.child_records(childId, actorId)}
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc).strip("'")) from exc
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
 
 
 @app.post("/api/records")

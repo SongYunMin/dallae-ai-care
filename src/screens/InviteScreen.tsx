@@ -12,7 +12,7 @@ const roleLabel: Record<UserRole, string> = {
 };
 
 export function InviteScreen() {
-  const { payload, navigate, setCurrentUser, startSession, toast, exitDemoMode } = useApp();
+  const { payload, navigate, setCurrentUser, startSession, toast, exitDemoMode, refreshSharedRecords } = useApp();
   const token = (payload as { token?: string })?.token ?? '';
   const [invite, setInvite] = useState<Invite | null>(null);
   const [inviteError, setInviteError] = useState('');
@@ -54,8 +54,10 @@ export function InviteScreen() {
     }
     try {
       const u = await acceptInvite(token, { name: name.trim(), emailOrPin: pin });
-      const s = await startCareSession(u.name, u.userId);
       setCurrentUser({ id: u.userId, name: u.name, role: u.role, relationship: u.relationship });
+      // 세션 시작 전에 부모가 남긴 기존 공유 기록을 먼저 맞춰, 진입 직후 최근 기록이 비지 않게 한다.
+      await refreshSharedRecords(u.childId, u.userId);
+      const s = await startCareSession(u.name, u.userId);
       startSession({
         id: s.careSessionId,
         familyId: u.familyId,

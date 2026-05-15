@@ -46,6 +46,15 @@ def _age_in_months(birth_date: str) -> int:
     return max(0, months)
 
 
+def _care_context_id(family_id: str, child_id: str) -> str:
+    return f"carectx_{family_id}_{child_id}"
+
+
+def _append_unique(items: list[str], value: str) -> None:
+    if value and value not in items:
+        items.append(value)
+
+
 class DallaeStore:
     """해커톤 MVP용 JSON 파일 저장소.
 
@@ -61,6 +70,8 @@ class DallaeStore:
         self._reset_state()
         if self.store_path.exists():
             self._load_json_state()
+            if self._needs_migration_persist:
+                self._persist()
         else:
             self.seed()
             self._persist()
@@ -74,9 +85,11 @@ class DallaeStore:
         self.sessions: dict[str, dict] = {}
         self.voice_notes: list[dict] = []
         self.records: dict[str, dict] = {}
+        self.care_contexts: dict[str, dict] = {}
         self.notifications: dict[str, dict] = {}
         self.checklists: dict[str, dict] = {}
         self.thank_you_reports: dict[str, dict] = {}
+        self._needs_migration_persist = False
 
     def _load_json_state(self) -> None:
         """저장된 JSON 문서를 메모리 dict/list로 복원한다."""
@@ -86,6 +99,7 @@ class DallaeStore:
         except (OSError, JSONDecodeError) as exc:
             raise ValueError(f"JSON 저장소를 읽을 수 없습니다: {self.store_path}") from exc
 
+        version = int(state.get("version", 1) or 1)
         self.families = dict(state.get("families", {}))
         self.children = dict(state.get("children", {}))
         self.members = dict(state.get("members", {}))
@@ -94,13 +108,26 @@ class DallaeStore:
         self.sessions = dict(state.get("sessions", {}))
         self.voice_notes = list(state.get("voiceNotes", []))
         self.records = dict(state.get("records", {}))
+        self.care_contexts = {
+            context_id: {
+                "id": context.get("id") or context_id,
+                "familyId": context["familyId"],
+                "childId": context["childId"],
+                "memberIds": list(context.get("memberIds", [])),
+                "recordIds": list(context.get("recordIds", [])),
+            }
+            for context_id, context in state.get("careContexts", {}).items()
+            if context.get("familyId") and context.get("childId")
+        }
         self.notifications = dict(state.get("notifications", {}))
         self.checklists = dict(state.get("checklists", {}))
         self.thank_you_reports = dict(state.get("thankYouReports", {}))
+        self._reconcile_care_contexts()
+        self._needs_migration_persist = version < 2 or "careContexts" not in state
 
     def _snapshot(self) -> dict:
         return {
-            "version": 1,
+            "version": 2,
             "families": self.families,
             "children": self.children,
             "members": self.members,
@@ -109,10 +136,64 @@ class DallaeStore:
             "sessions": self.sessions,
             "voiceNotes": self.voice_notes,
             "records": self.records,
+            "careContexts": self.care_contexts,
             "notifications": self.notifications,
             "checklists": self.checklists,
             "thankYouReports": self.thank_you_reports,
         }
+
+    def _ensure_care_context(self, family_id: str, child_id: str) -> dict:
+        """아이 단위 공유 기록 묶음을 보장하고 기존 멤버/기록 누락을 보정한다."""
+        context_id = _care_context_id(family_id, child_id)
+        context = self.care_contexts.setdefault(
+            context_id,
+            {
+                "id": context_id,
+                "familyId": family_id,
+                "childId": child_id,
+                "memberIds": [],
+                "recordIds": [],
+            },
+        )
+        context["familyId"] = family_id
+        context["childId"] = child_id
+        context["memberIds"] = list(dict.fromkeys(context.get("memberIds", [])))
+        context["recordIds"] = list(dict.fromkeys(context.get("recordIds", [])))
+
+        # 같은 가족의 현재 구성원은 같은 아이 공유 기록 컨텍스트에 참여한다.
+        for member_id, member in self.members.items():
+            if member.get("familyId") == family_id:
+                _append_unique(context["memberIds"], member_id)
+
+        # canonical records는 복제하지 않고 record id만 연결한다.
+        for record_id, record in self.records.items():
+            if record.get("familyId") == family_id and record.get("childId") == child_id:
+                _append_unique(context["recordIds"], record_id)
+        return context
+
+    def _reconcile_care_contexts(self) -> None:
+        """v1 JSON이나 수동 상태 변경으로 빠진 careContexts 연결을 로딩 시 복구한다."""
+        for child in self.children.values():
+            family_id = child.get("familyId")
+            child_id = child.get("id")
+            if family_id and child_id:
+                self._ensure_care_context(family_id, child_id)
+
+    def _link_record_to_care_context(self, record: dict) -> None:
+        context = self._ensure_care_context(record["familyId"], record["childId"])
+        _append_unique(context["recordIds"], record["id"])
+
+    def _link_member_to_care_context(self, family_id: str, child_id: str, member_id: str) -> None:
+        context = self._ensure_care_context(family_id, child_id)
+        _append_unique(context["memberIds"], member_id)
+
+    def _unlink_record_from_care_contexts(self, record_id: str) -> None:
+        for context in self.care_contexts.values():
+            context["recordIds"] = [item for item in context.get("recordIds", []) if item != record_id]
+
+    def _unlink_member_from_care_contexts(self, member_id: str) -> None:
+        for context in self.care_contexts.values():
+            context["memberIds"] = [item for item in context.get("memberIds", []) if item != member_id]
 
     def _persist(self) -> None:
         """현재 메모리 상태를 JSON 파일에 안전하게 반영한다."""
@@ -206,6 +287,7 @@ class DallaeStore:
                 "createdBy": "user_parent_1",
                 "createdByRole": "PARENT_ADMIN",
             }
+        self._reconcile_care_contexts()
 
     def create_onboarding(self, payload: dict) -> dict:
         family_id = "family_1"
@@ -235,6 +317,7 @@ class DallaeStore:
         self.members[user_id] = member
         care_note = (payload.get("careNotes") or "").strip()
         self.rules[child_id] = [care_note] if care_note else []
+        self._ensure_care_context(family_id, child_id)
         self._persist()
         return {
             "familyId": family_id,
@@ -307,6 +390,7 @@ class DallaeStore:
                 raise ValueError("마지막 관리자 보호자는 삭제할 수 없습니다.")
         self.delete_active_sessions_for_member(family_id, member_id, persist=False)
         del self.members[member_id]
+        self._unlink_member_from_care_contexts(member_id)
         self._persist()
 
     def delete_active_sessions_for_member(self, family_id: str, member_id: str, *, persist: bool = True) -> list[str]:
@@ -363,6 +447,8 @@ class DallaeStore:
         accepted_user_id = invite.get("acceptedUserId")
         if accepted_user_id and accepted_user_id in self.members:
             member = self.members[accepted_user_id]
+            self._link_member_to_care_context(member["familyId"], invite.get("childId") or "child_1", accepted_user_id)
+            self._persist()
             return {
                 "userId": accepted_user_id,
                 "familyId": member["familyId"],
@@ -389,6 +475,7 @@ class DallaeStore:
         invite["status"] = "ACCEPTED"
         invite["acceptedUserId"] = user_id
         self.invites[token] = invite
+        self._link_member_to_care_context(invite["familyId"], invite.get("childId") or "child_1", user_id)
         self._persist()
         return {
             "userId": user_id,
@@ -401,7 +488,25 @@ class DallaeStore:
             "thankYouMessage": thank_you_message,
         }
 
-    def child_records(self, child_id: str) -> list[dict]:
+    def child_records(self, child_id: str, actor_id: str | None = None) -> list[dict]:
+        if actor_id:
+            child = self.children.get(child_id)
+            actor = self.members.get(actor_id)
+            if not child:
+                raise KeyError("아이를 찾을 수 없습니다.")
+            if not actor:
+                raise KeyError("사용자를 찾을 수 없습니다.")
+            context = self._ensure_care_context(child["familyId"], child_id)
+            if actor_id not in context.get("memberIds", []):
+                raise PermissionError("같은 아이 돌봄 기록에 참여한 구성원만 접근할 수 있습니다.")
+            record_ids = context.get("recordIds", [])
+            records = [
+                self.records[record_id]
+                for record_id in record_ids
+                if record_id in self.records and self.records[record_id].get("childId") == child_id
+            ]
+            return sorted(records, key=lambda record: record["recordedAt"], reverse=True)
+
         records = [record for record in self.records.values() if record.get("childId") == child_id]
         return sorted(records, key=lambda record: record["recordedAt"], reverse=True)
 
@@ -423,6 +528,7 @@ class DallaeStore:
             "photoUrl": payload.get("photoUrl"),
         }
         self.records[record["id"]] = record
+        self._link_record_to_care_context(record)
         self._persist()
         return record
 
@@ -442,6 +548,7 @@ class DallaeStore:
         if record_id not in self.records:
             raise KeyError("돌봄 기록을 찾을 수 없습니다.")
         del self.records[record_id]
+        self._unlink_record_from_care_contexts(record_id)
         self._persist()
 
     def start_session(self, payload: dict) -> dict:
@@ -462,6 +569,7 @@ class DallaeStore:
             "status": "ACTIVE",
         }
         self.sessions[session_id] = session
+        self._link_member_to_care_context(payload["familyId"], payload["childId"], payload["caregiverId"])
         self._persist()
         return session
 

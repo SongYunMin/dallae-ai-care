@@ -13,6 +13,7 @@ import {
 import { formatDuration, formatTime } from "@/lib/date";
 import { itemDateTime, todayKey, formatItemTime } from "@/lib/checklist";
 import { careLogoutButtonState } from "@/lib/care-mode-menu";
+import { getRecentCareModeRecords } from "@/lib/care-mode-records";
 import { saveFinalThankYouReport } from "@/lib/thank-you-report";
 import type { CareRecord, CareRecordType, CareSession, ChecklistItem } from "@/lib/types";
 import { nowKstIso } from "@/lib/kst";
@@ -823,22 +824,6 @@ export function CareModeScreen() {
       </div>
     </div>
   );
-}
-
-function getRecentCareModeRecords(
-  records: CareRecord[],
-  session: CareSession | null,
-): CareRecord[] {
-  // 돌봄 세션 중에는 해당 세션 기록만 보여주고, 부모 기록 모드에서는 전체 최신 기록을 보여준다.
-  const sessionStartedAt = session ? new Date(session.startedAt).getTime() : null;
-  return records
-    .filter((record) => {
-      if (!session) return true;
-      if (record.careSessionId) return record.careSessionId === session.id;
-      return sessionStartedAt !== null && new Date(record.recordedAt).getTime() >= sessionStartedAt;
-    })
-    .sort((a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime())
-    .slice(0, 3);
 }
 
 function whenLabel(targetMs: number): string {

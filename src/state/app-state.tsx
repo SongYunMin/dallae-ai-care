@@ -211,6 +211,7 @@ type AppState = {
   logout: () => void;
 
   records: CareRecord[];
+  refreshSharedRecords: (childId?: string, actorId?: string) => Promise<CareRecord[]>;
   addRecord: (r: CareRecord) => void;
   updateRecord: (id: string, patch: CareRecordPatch) => Promise<void>;
   deleteRecord: (id: string) => Promise<void>;
@@ -428,6 +429,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
       });
   }, [child.id, currentUser.id, demoMode, loadError, mergeNotifications, toast]);
 
+  const refreshSharedRecords = useCallback(
+    async (targetChildId = child.id, actorId = currentUser.id) => {
+      const loadedRecords = await listCareRecords(targetChildId, actorId);
+      const sorted = sortRecords(loadedRecords);
+      setRecords(sorted);
+      return sorted;
+    },
+    [child.id, currentUser.id],
+  );
+
   useEffect(() => {
     if (!isBootstrapping) refreshAgentNotifications();
   }, [isBootstrapping, refreshAgentNotifications]);
@@ -437,7 +448,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     let active = true;
     // 부모/돌보미가 서로 다른 화면 또는 기기에서 남긴 기록을 JSON 저장소 기준으로 다시 맞춘다.
-    void listCareRecords(child.id)
+    void listCareRecords(child.id, currentUser.id)
       .then((loadedRecords) => {
         if (active) setRecords(sortRecords(loadedRecords));
       })
@@ -448,7 +459,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => {
       active = false;
     };
-  }, [child.id, demoMode, isBootstrapping, loadError, screen, toast]);
+  }, [child.id, currentUser.id, demoMode, isBootstrapping, loadError, screen, toast]);
 
   const toastRef = useRef(toast);
   toastRef.current = toast;
@@ -647,6 +658,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       toast('로그아웃했어요');
     },
     records,
+    refreshSharedRecords,
     addRecord: (r) => {
       setRecords((arr) => upsertRecord(arr, r));
       refreshAgentNotifications();

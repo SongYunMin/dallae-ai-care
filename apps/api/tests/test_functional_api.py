@@ -422,6 +422,71 @@ def test_records_are_persisted_listed_and_status_updates(monkeypatch, tmp_path):
     ]
 
 
+def test_invited_caregiver_and_parent_share_child_context_records(monkeypatch, tmp_path):
+    client = make_client(monkeypatch, tmp_path)
+    parent_record = client.post(
+        "/api/records",
+        json={
+            "familyId": "family_1",
+            "childId": "child_1",
+            "type": "FEEDING",
+            "amountMl": 170,
+            "recordedBy": "user_parent_1",
+            "recordedByName": "엄마",
+            "source": "MANUAL",
+            "memo": "부모가 남긴 공유 기록",
+        },
+    ).json()
+    invite = client.post(
+        "/api/families/family_1/invites",
+        json={"relationship": "이모", "role": "CAREGIVER_EDITOR", "memo": "오늘 부탁해요"},
+    ).json()
+    caregiver = client.post(
+        f"/api/invites/{invite['token']}/accept",
+        json={"name": "민지", "emailOrPin": "1111"},
+    ).json()
+
+    caregiver_view = client.get(f"/api/records?childId=child_1&actorId={caregiver['userId']}")
+    caregiver_record = client.post(
+        "/api/records",
+        json={
+            "familyId": "family_1",
+            "childId": "child_1",
+            "type": "DIAPER",
+            "recordedBy": caregiver["userId"],
+            "recordedByName": caregiver["name"],
+            "source": "MANUAL",
+            "memo": "돌보미가 남긴 공유 기록",
+        },
+    ).json()
+    parent_view = client.get("/api/records?childId=child_1&actorId=user_parent_1")
+
+    main.store.families["family_2"] = {"id": "family_2", "name": "다른 가족"}
+    main.store.children["child_2"] = {
+        "id": "child_2",
+        "familyId": "family_2",
+        "name": "서아",
+        "ageInMonths": 2,
+        "birthDate": "2026-03-01",
+        "feedingType": "FORMULA",
+    }
+    main.store.members["outsider_1"] = {
+        "id": "outsider_1",
+        "familyId": "family_2",
+        "name": "다른 보호자",
+        "relationship": "mother",
+        "role": "PARENT_ADMIN",
+    }
+    blocked = client.get("/api/records?childId=child_1&actorId=outsider_1")
+
+    assert caregiver_view.status_code == 200
+    assert parent_record["id"] in {item["id"] for item in caregiver_view.json()["records"]}
+    assert parent_view.status_code == 200
+    assert {parent_record["id"], caregiver_record["id"]}.issubset({item["id"] for item in parent_view.json()["records"]})
+    assert blocked.status_code == 403
+    assert blocked.json()["detail"] == "같은 아이 돌봄 기록에 참여한 구성원만 접근할 수 있습니다."
+
+
 def test_record_write_is_denied_for_viewer(monkeypatch, tmp_path):
     client = make_client(monkeypatch, tmp_path)
     main.store.members["viewer_1"] = {

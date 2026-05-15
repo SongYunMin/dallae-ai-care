@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import pytest
@@ -349,6 +350,114 @@ def test_store_persists_records_to_json(tmp_path):
     assert store_path.with_name(f"{store_path.name}.bak").exists()
 
 
+def test_store_migrates_v1_json_records_into_care_contexts(tmp_path):
+    store_path = tmp_path / "v1-shared-records.store.json"
+    store_path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "families": {"family_1": {"id": "family_1", "name": "하린이 가족"}},
+                "children": {
+                    "child_1": {
+                        "id": "child_1",
+                        "familyId": "family_1",
+                        "name": "하린",
+                        "ageInMonths": 6,
+                        "birthDate": "2025-11-07",
+                        "feedingType": "FORMULA",
+                    }
+                },
+                "members": {
+                    "user_parent_1": {
+                        "id": "user_parent_1",
+                        "familyId": "family_1",
+                        "name": "엄마",
+                        "relationship": "mother",
+                        "role": "PARENT_ADMIN",
+                    },
+                    "user_grandma_1": {
+                        "id": "user_grandma_1",
+                        "familyId": "family_1",
+                        "name": "할머니",
+                        "relationship": "grandmother",
+                        "role": "CAREGIVER_EDITOR",
+                    },
+                },
+                "rules": {},
+                "invites": {},
+                "sessions": {},
+                "voiceNotes": [],
+                "records": {
+                    "record_parent_1": {
+                        "id": "record_parent_1",
+                        "familyId": "family_1",
+                        "childId": "child_1",
+                        "type": "FEEDING",
+                        "amountMl": 160,
+                        "recordedAt": "2026-05-15T09:00:00+09:00",
+                        "recordedBy": "user_parent_1",
+                        "recordedByName": "엄마",
+                        "source": "MANUAL",
+                        "memo": "부모가 남긴 기록",
+                    }
+                },
+                "notifications": {},
+                "checklists": {},
+                "thankYouReports": {},
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    store = DallaeStore(store_path)
+
+    context = store.care_contexts["carectx_family_1_child_1"]
+    assert context["familyId"] == "family_1"
+    assert context["childId"] == "child_1"
+    assert set(context["memberIds"]) == {"user_parent_1", "user_grandma_1"}
+    assert context["recordIds"] == ["record_parent_1"]
+    assert store._snapshot()["version"] == 2
+    assert json.loads(store_path.read_text(encoding="utf-8"))["version"] == 2
+
+
+def test_store_links_created_records_to_child_care_context(tmp_path):
+    store_path = tmp_path / "context-record-link.store.json"
+    store = DallaeStore(store_path)
+
+    created = store.create_record(
+        {
+            "familyId": "family_1",
+            "childId": "child_1",
+            "type": "FEEDING",
+            "amountMl": 180,
+            "recordedBy": "user_parent_1",
+            "recordedByName": "엄마",
+            "source": "MANUAL",
+            "memo": "부모 기록",
+        }
+    )
+
+    context = store.care_contexts["carectx_family_1_child_1"]
+    assert created["id"] in context["recordIds"]
+    assert created["id"] in DallaeStore(store_path).care_contexts["carectx_family_1_child_1"]["recordIds"]
+
+
+def test_store_links_accepted_invite_member_to_child_care_context(tmp_path):
+    store_path = tmp_path / "context-invite-member.store.json"
+    store = DallaeStore(store_path)
+    invite = store.create_invite(
+        "family_1",
+        {"relationship": "이모", "role": "CAREGIVER_EDITOR", "memo": "이모 감사 메시지"},
+        "http://localhost:5173",
+    )
+
+    accepted = store.accept_invite(invite["token"], {"name": "민지", "emailOrPin": "1111"})
+
+    context = DallaeStore(store_path).care_contexts["carectx_family_1_child_1"]
+    assert accepted["userId"] in context["memberIds"]
+
+
 def test_local_store_default_path_is_stable_from_any_process_cwd(monkeypatch, tmp_path):
     monkeypatch.delenv("DALLAE_STORE_PATH", raising=False)
     monkeypatch.delenv("VERCEL", raising=False)
@@ -390,6 +499,9 @@ def test_store_persists_parent_and_caregiver_records_in_one_json_map(tmp_path):
     assert {parent_record["id"], caregiver_record["id"]}.issubset({record["id"] for record in records})
     assert reloaded.records[parent_record["id"]]["recordedBy"] == "user_parent_1"
     assert reloaded.records[caregiver_record["id"]]["recordedBy"] == "user_grandma_1"
+    assert {parent_record["id"], caregiver_record["id"]}.issubset(
+        set(reloaded.care_contexts["carectx_family_1_child_1"]["recordIds"])
+    )
 
 
 def test_store_uses_tmp_path_on_vercel(monkeypatch, tmp_path):
