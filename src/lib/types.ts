@@ -27,6 +27,7 @@ export type AgentCareResponse = {
   ruleReminders: string[];
   recordSuggestions: string[];
   proactiveNotifications: string[];
+  followUpQuestions?: string[];
   escalation: AgentEscalation;
   agentKind?: string;
   fallbackUsed?: boolean;

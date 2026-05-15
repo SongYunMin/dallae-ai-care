@@ -79,6 +79,7 @@ export type ThankYouMessageResult = {
   agentKind?: string;
   fallbackUsed?: boolean;
   evidence?: string[];
+  followUpQuestions?: string[];
 };
 
 export class ApiHttpError extends Error {

@@ -51,9 +51,18 @@ DAEKYO_KIDS_PROGRAM_POLICY = """
 - 키즈잼은 현재 독립 공식 사이트보다 소개/운영 링크가 바뀔 수 있으므로, 운영 여부와 예약은 가까운 센터/공식 채널에서 확인하도록 안내한다.
 
 월령별 추천 흐름
+- 12개월 전후: 걷기 전후의 돌 아기에게 맞춰 짧은 감각 체험, 낮은 장애물, 기어가기, 조작형 사운드북/토이북처럼 부담 없는 활동을 먼저 추천한다.
 - 24~36개월: 트니트니처럼 몸을 크게 쓰는 놀이를 먼저 두고, 키즈잼 책놀이/아트 체험과 키즈스콜레 그림책 루틴을 짧게 붙인다.
 - 37~48개월: 트니트니 신체표현과 역할놀이, 키즈잼 씽크잼/아트/생태 체험, 키즈스콜레 100일 독서나 교구 활동을 함께 제안한다.
 - 49~60개월: 키즈잼의 사고력/탐구형 체험과 키즈스콜레 리터러시/사고력 독서 흐름을 더 강조하고, 에너지 발산이 필요하면 트니트니 계열 신체활동을 곁들인다.
+
+12개월 아기 기준 예시 샷
+- Q: 아기랑 체험할 수 있는 시설 추천해줘
+  A: 북 플레이존과 원목 교구 등의 프리미엄 공간 체험을 할 수 있는 '키즈잼' 추천합니다.
+- Q: 문센 추천해줘
+  A: 걷기가 서툰 돌 아기에 맞춤으로 기어가기, 낮은 장애물 넘기 등 대근육 발달에 집중한 선생님의 활기찬 에너지를 경험할 수 있는 '트니트니 베이비' 추천합니다!
+- Q: 돌아기 책 추천해줘
+  A: 돌 아기는 소리와 조작이 결합된 사운드북과 토이북이 적합합니다. 꿈꾸는 달팽이의 '따끈따끈 베이커리', '클래식 사운드북 시리즈' 등의 단행본으로 가볍게 체험 시작해보는 것 추천해요!
 
 응답 원칙
 - 질문이 일반적인 활동 추천이면 "집에서 바로 할 놀이 1~2개 + 대교 프로그램 선택지 2~3개" 형태로 답한다.
@@ -181,12 +190,27 @@ class CareChatAgent(BaseDallaeAgent):
                         "ruleReminders": ["적용되는 가족 규칙"],
                         "recordSuggestions": ["기록하면 좋은 내용"],
                         "proactiveNotifications": ["부모에게 알릴 필요가 있는 내용"],
+                        "followUpQuestions": ["사용자가 달래에게 바로 다시 물어볼 만한 안전한 후속 질문 2~3개"],
                         "escalation": "NONE | ASK_PARENT | MEDICAL_CHECK",
                     },
                     ensure_ascii=False,
                 ),
             ]
         )
+
+    def _normalize_follow_up_questions(self, value: Any) -> list[str]:
+        """LLM이 내려준 후속 질문을 UI 칩에 넣을 수 있는 짧은 문자열 3개로 제한한다."""
+        if not isinstance(value, list):
+            return []
+        questions: list[str] = []
+        for item in value:
+            text = str(item).strip()
+            if not text or text in questions:
+                continue
+            questions.append(text[:80])
+            if len(questions) == 3:
+                break
+        return questions
 
     def _normalize(self, payload: dict[str, Any]) -> dict:
         """LLM 출력 누락 필드를 UI가 기대하는 빈 배열/기본값으로 보정한다."""
@@ -196,6 +220,7 @@ class CareChatAgent(BaseDallaeAgent):
             "ruleReminders": list(payload.get("ruleReminders") or []),
             "recordSuggestions": list(payload.get("recordSuggestions") or []),
             "proactiveNotifications": list(payload.get("proactiveNotifications") or []),
+            "followUpQuestions": self._normalize_follow_up_questions(payload.get("followUpQuestions")),
             "escalation": payload.get("escalation") if payload.get("escalation") in {"NONE", "ASK_PARENT", "MEDICAL_CHECK"} else "NONE",
         }
 
@@ -208,12 +233,15 @@ class CareChatAgent(BaseDallaeAgent):
             response["escalation"] = "MEDICAL_CHECK"
             response["answer"] = "위험 신호일 수 있어요. 보호자에게 즉시 연락하고, 상태가 심하면 의료진 확인을 받아주세요."
             response["nextActions"] = ["보호자에게 바로 연락하세요.", "호흡, 체온, 의식 상태를 확인하세요."]
+            response["followUpQuestions"] = ["보호자에게 뭐라고 연락하면 돼?", "현재 상태는 어떻게 기록하면 돼?"]
         elif any(keyword in message for keyword in developmental_keywords):
             response["escalation"] = "ASK_PARENT"
             response["answer"] = "발달이나 치료가 걱정되는 상황이라면 프로그램 추천보다 보호자와 전문가 확인이 먼저예요. 확인이 끝난 뒤에는 아이가 편안해하는 범위에서 트니트니, 키즈잼, 키즈스콜레 활동을 살짝 곁들여볼 수 있어요."
             response["nextActions"] = ["보호자에게 현재 걱정되는 행동을 공유하세요.", "필요하면 소아청소년과나 발달 전문가 상담을 확인하세요."]
+            response["followUpQuestions"] = ["보호자에게 어떤 행동을 공유하면 돼?", "상담 전에는 어떤 기록을 남기면 좋아?"]
         elif response.get("escalation") == "NONE" and any(keyword in message for keyword in parent_keywords):
             response["escalation"] = "ASK_PARENT"
+            response.setdefault("followUpQuestions", ["보호자에게 뭐라고 확인하면 돼?", "현재 상황은 어떻게 기록하면 돼?"])
         return response
 
     def _evidence_from_context(self, context: dict) -> list[str]:
@@ -279,6 +307,11 @@ class CareChatAgent(BaseDallaeAgent):
             "ruleReminders": [],
             "recordSuggestions": ["어떤 놀이에 오래 집중했는지, 낯설어한 활동은 무엇인지 기록해두면 다음 추천이 더 정확해져요."],
             "proactiveNotifications": ["가까운 센터별 운영 여부와 대상 월령은 공식 채널에서 확인해 주세요."],
+            "followUpQuestions": [
+                "트니트니에서는 어떤 활동을 해볼 수 있어?",
+                "키즈잼은 우리 아이에게 어떤 점이 좋아?",
+                "키즈스콜레 독서 루틴은 어떻게 시작하면 돼?",
+            ],
             "escalation": "NONE",
         }
 
@@ -292,6 +325,7 @@ class CareChatAgent(BaseDallaeAgent):
                 "ruleReminders": [rule for rule in rules if "영상" in rule or "유튜브" in rule][:1],
                 "recordSuggestions": ["보챈 시간과 달랜 방법을 기록해두면 좋아요."],
                 "proactiveNotifications": [],
+                "followUpQuestions": ["지금 보채는 이유는 어떻게 확인하면 돼?", "영상 말고 달랠 방법은 뭐가 있어?"],
                 "escalation": "ASK_PARENT",
             }
         if "약" in user_message:
@@ -301,6 +335,7 @@ class CareChatAgent(BaseDallaeAgent):
                 "ruleReminders": [rule for rule in rules if "약" in rule][:1],
                 "recordSuggestions": ["확인 후 약 기록을 남겨주세요."],
                 "proactiveNotifications": ["약 복용 확인이 필요할 수 있어요."],
+                "followUpQuestions": ["보호자에게 뭐라고 확인하면 돼?", "약 기록은 어떻게 남기면 돼?"],
                 "escalation": "ASK_PARENT",
             }
         if self._is_daekyo_program_question(user_message):
@@ -320,6 +355,7 @@ class CareChatAgent(BaseDallaeAgent):
                 "ruleReminders": [],
                 "recordSuggestions": ["수유 시간과 양을 기록해두면 다음 돌봄자가 이어받기 쉬워요."],
                 "proactiveNotifications": [],
+                "followUpQuestions": ["다음 수유는 언제쯤 확인하면 돼?", "수유 기록은 어떻게 남기면 돼?"],
                 "escalation": "NONE",
             }
         return {
@@ -328,6 +364,7 @@ class CareChatAgent(BaseDallaeAgent):
             "ruleReminders": rules[:2],
             "recordSuggestions": ["방금 확인한 상태를 기록해두면 다음 보호자가 이어받기 쉬워요."],
             "proactiveNotifications": [],
+            "followUpQuestions": ["기저귀는 먼저 어떻게 확인하면 돼?", "졸림 신호는 어떻게 보면 돼?", "마지막 수유도 확인해줄 수 있어?"],
             "escalation": "NONE",
         }
 

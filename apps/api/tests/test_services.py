@@ -96,6 +96,7 @@ def test_agent_guard_prioritizes_expert_check_for_developmental_concerns():
             "ruleReminders": [],
             "recordSuggestions": [],
             "proactiveNotifications": [],
+            "followUpQuestions": ["트니트니는 매일 하면 돼?"],
             "escalation": "NONE",
         },
         "발달 지연이 걱정되는데 트니트니를 하면 될까?",
@@ -103,6 +104,7 @@ def test_agent_guard_prioritizes_expert_check_for_developmental_concerns():
 
     assert response["escalation"] == "ASK_PARENT"
     assert "전문가 확인" in response["answer"]
+    assert response["followUpQuestions"] == ["보호자에게 어떤 행동을 공유하면 돼?", "상담 전에는 어떤 기록을 남기면 좋아?"]
 
 
 def test_chat_agent_prompt_includes_cute_tone_without_softening_safety():
@@ -125,9 +127,13 @@ def test_chat_agent_prompt_strongly_recommends_daekyo_kids_programs():
     assert "키즈잼" in prompt
     assert "키즈스콜레" in prompt
     assert "두돌 전후부터 60개월 안팎" in prompt
+    assert "12개월 아기 기준 예시 샷" in prompt
+    assert "트니트니 베이비" in prompt
+    assert "따끈따끈 베이커리" in prompt
     assert "가격, 현재 모집 여부, 정확한 운영 지점" in prompt
     assert "https://www.teuni.com/" in prompt
     assert "https://www.kidsschole.com/" in prompt
+    assert "followUpQuestions" in prompt
 
 
 def test_chat_agent_fallback_uses_cute_tone_for_general_response():
@@ -154,6 +160,19 @@ def test_chat_agent_fallback_recommends_daekyo_programs_for_toddler_activity_que
     assert "https://www.kidsschole.com/" in response["answer"]
     assert any("트니트니" in action for action in response["nextActions"])
     assert any("공식 채널" in item for item in response["proactiveNotifications"])
+    assert response["followUpQuestions"] == [
+        "트니트니에서는 어떤 활동을 해볼 수 있어?",
+        "키즈잼은 우리 아이에게 어떤 점이 좋아?",
+        "키즈스콜레 독서 루틴은 어떻게 시작하면 돼?",
+    ]
+
+
+def test_chat_agent_fallback_uses_safe_followups_for_medicine_question():
+    service = DallaeAgentService()
+    response = service.mock_response("약 먹였어?", {"activeRules": [], "latestStatus": {}})
+
+    assert response["escalation"] == "ASK_PARENT"
+    assert response["followUpQuestions"] == ["보호자에게 뭐라고 확인하면 돼?", "약 기록은 어떻게 남기면 돼?"]
 
 
 def test_chat_agent_fallback_mentions_parent_record_author_for_feeding():

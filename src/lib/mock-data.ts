@@ -176,6 +176,7 @@ export function makeDemoAgentResponse(message: string): AgentCareResponse {
     ruleReminders: matchedRules,
     recordSuggestions: ['상황이 바뀌면 메모 기록을 남겨 주세요'],
     proactiveNotifications: [],
+    followUpQuestions: ['최근 기록은 어떻게 확인하면 돼?', '부모에게 뭐라고 물어보면 돼?'],
     escalation: message.includes('열') || message.includes('아파') ? 'ASK_PARENT' : 'NONE',
     agentKind: 'demo',
     fallbackUsed: true,

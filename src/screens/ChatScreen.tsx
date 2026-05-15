@@ -232,11 +232,27 @@ export function ChatScreen() {
               </div>
             );
           }
+          const followUpQuestions = m.response?.followUpQuestions?.slice(0, 3) ?? [];
           return (
             <div key={m.id} className="flex items-start gap-2">
               <IonMascot variant="basic" size={32} />
               <div className="flex-1 max-w-[88%] rounded-2xl rounded-tl-sm bg-card border border-border px-4 py-2.5 text-sm whitespace-pre-wrap leading-relaxed">
                 <p>{body}</p>
+                {followUpQuestions.length > 0 && (
+                  <div className="mt-3 flex flex-wrap gap-2 whitespace-normal">
+                    {followUpQuestions.map((question) => (
+                      <button
+                        key={question}
+                        type="button"
+                        onClick={() => send(question)}
+                        disabled={loading}
+                        className="min-h-10 max-w-full rounded-full border border-border bg-background/80 px-3 py-2 text-left text-[11px] font-semibold leading-snug text-foreground/80 shadow-sm transition-transform active:scale-95 disabled:opacity-50"
+                      >
+                        {question}
+                      </button>
+                    ))}
+                  </div>
+                )}
                 {m.response?.fallbackUsed && (
                   <span className="mt-2 inline-flex text-[10px] font-bold rounded-full bg-warning/40 text-warning-foreground px-2 py-0.5">
                     기본 응답
